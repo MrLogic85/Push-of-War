@@ -7,19 +7,17 @@ import org.jbox2d.dynamics.BodyDef
 import org.jbox2d.dynamics.FixtureDef
 import org.jbox2d.collision.shapes.PolygonShape
 import com.sleepyduck.pushofwar.PushOfWarTest
+import org.jbox2d.dynamics.Filter
 
-class StaticBox(pow: PushOfWarTest, x: Float = 0, y: Float = 0, w: Float = 1, h:Float =1)
-	extends BaseObject(pow) {
+class StaticBox(pow: PushOfWarTest, collisionGroup: Filter, x: Float = 0, y: Float = 0, w: Float = 1, h: Float = 1)
+	extends BaseObject(pow, collisionGroup, x, y) {
 
-	body = pow getWorld() createBody new BodyDef {
-		`type` = BodyType.STATIC
-		position set (x, y)
-	}
-
-	body createFixture new FixtureDef {
+	def getFixture = new FixtureDef {
 		density = 1
 		shape = new PolygonShape {
 			setAsBox(w, h)
 		}
 	}
+
+	body setType BodyType.STATIC
 }

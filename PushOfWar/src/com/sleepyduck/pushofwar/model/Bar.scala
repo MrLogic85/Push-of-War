@@ -14,27 +14,17 @@ import org.jbox2d.dynamics.joints.JointType
 import org.jbox2d.dynamics.joints.PulleyJointDef
 import org.jbox2d.dynamics.joints.RevoluteJointDef
 import scala.collection.mutable.ArrayBuffer
+import org.jbox2d.dynamics.Filter
 
-case class Bar(pow: PushOfWarTest, x: Float = 0, y: Float = 0, w: Float = 1, h: Float, friction: Float = 1F, density: Float = 1F)
-	extends BaseObjectDynamic(pow) {
+case class Bar(pow: PushOfWarTest, collisionGroup: Filter, x: Float = 0, y: Float = 0, w: Float = 1, h: Float)
+	extends BaseObjectDynamic(pow, collisionGroup, x, y) {
 
-	body = pow getWorld () createBody new BodyDef {
-		`type` = BodyType.DYNAMIC
-		position set (x, y)
-		gravityScale = 0
+	def copy = new Bar(pow, collisionGroup, x, y, w, h)
+
+	def getShape = new PolygonShape {
+		val vertices = new Array[Vec2](8)
+		for (i <- 0 until 4) vertices(i) = new Vec2((w - h) / 2 + h / 2 * Math.sin(Math.PI * i / 3).toFloat, h / 2 * Math.cos(Math.PI * i / 3).toFloat)
+		for (i <- 0 until 4) vertices(i + 4) = new Vec2((h - w) / 2 - h / 2 * Math.sin(Math.PI * i / 3).toFloat, -h / 2 * Math.cos(Math.PI * i / 3).toFloat)
+		set(vertices, 8)
 	}
-
-	body createFixture new FixtureDef {
-		friction = Bar.this.friction
-		density = Bar.this.density
-		isSensor = true
-		shape = new PolygonShape {
-			val vertices = new Array[Vec2](8)
-			for (i <- 0 until 4) vertices(i) = new Vec2((w - h) / 2 + h / 2 * Math.sin(Math.PI * i / 3).toFloat, h / 2 * Math.cos(Math.PI * i / 3).toFloat)
-			for (i <- 0 until 4) vertices(i + 4) = new Vec2((h - w) / 2 - h / 2 * Math.sin(Math.PI * i / 3).toFloat, -h / 2 * Math.cos(Math.PI * i / 3).toFloat)
-			set(vertices, 8)
-		}
-	}
-
-	def copy = new Bar(pow, x, y, w, h, friction, density)
 }

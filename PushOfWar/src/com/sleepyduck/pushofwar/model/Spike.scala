@@ -10,13 +10,14 @@ import org.jbox2d.dynamics.joints.Joint
 import org.jbox2d.dynamics.joints.RevoluteJointDef
 import org.jbox2d.dynamics.joints.RevoluteJoint
 import org.jbox2d.common.Vec2
+import org.jbox2d.dynamics.Filter
 
-class Spike(pow: PushOfWarTest, x: Float = 0, y: Float = 0) extends BaseObjectDynamic(pow) {
+class Spike(pow: PushOfWarTest, collisionGroup: Filter, x: Float = 0, y: Float = 0) extends BaseObjectDynamic(pow, collisionGroup, x, y) {
 
 	val joints: ArrayBuffer[Option[RevoluteJoint]] = ArrayBuffer[Option[RevoluteJoint]]()
 
-	override def mouseDown = {
-		super.mouseDown
+	override def mouseDown(p: Vec2) = {
+		super.mouseDown(p)
 		clearJoints
 	}
 
@@ -33,36 +34,24 @@ class Spike(pow: PushOfWarTest, x: Float = 0, y: Float = 0) extends BaseObjectDy
 
 	def createJoints = {
 		joints clear ()
-		val objs = pow findObjects (body getWorldCenter ())
-		joints ++= (for {
-			o1 <- objs
-			o2 <- objs
-		} yield addJoint(o1, o2))
+		val objs = pow findObjects (body getWorldCenter ()) filter (_.get != Spike)
+		objs prepend (Option apply this)
+		for (i <- 0 until objs.length - 1) (joints += addJoint(objs(i), objs(i + 1)))
+		jointsCreated
 	}
 
-	def addJoint(o1: BaseObjectDynamic, o2: BaseObjectDynamic) = {
-		if (o1 != o2) Option apply (pow getWorld () createJoint new RevoluteJointDef() {
-			initialize(o1.body, o2.body, body getWorldCenter ())
-			jointDefCreated(this)
+	def jointsCreated = {}
+
+	def addJoint(o1: Option[BaseObjectDynamic], o2: Option[BaseObjectDynamic]) = {
+		if (o1 != o2 && (o1 isDefined) && (o2 isDefined)) Option apply (pow getWorld () createJoint new RevoluteJointDef() {
+			initialize((o1 get).body, (o2 get).body, body getWorldCenter ())
 		}).asInstanceOf[RevoluteJoint]
 		else None
 	}
 
-	def jointDefCreated(jointDef: RevoluteJointDef) = {}
+	def copy = new Spike(pow, collisionGroup, x, y)
 
-	body = pow getWorld () createBody new BodyDef {
-		`type` = BodyType.DYNAMIC
-		position set (x, y)
-		gravityScale = 0
-	}
+	def getShape = new CircleShape { this setRadius 0.3F }
 
-	body createFixture new FixtureDef {
-		friction = 1
-		density = 1
-		shape = new CircleShape
-		shape setRadius 0.1F
-		isSensor = true
-	}
-
-	def copy = new Spike(pow, x, y)
+	override def isSpike = true
 }
