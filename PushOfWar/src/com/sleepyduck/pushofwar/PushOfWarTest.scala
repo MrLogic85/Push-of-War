@@ -24,8 +24,12 @@ import com.sleepyduck.pushofwar.model.Wheel
 import com.sleepyduck.pushofwar.model.SteamWheel
 import com.sleepyduck.pushofwar.model.BarHard
 import com.sleepyduck.pushofwar.model.CollissionGroupNone
+import org.jbox2d.testbed.framework.j2d.TestPanelJ2D
+import java.awt.event.MouseWheelEvent
+import java.util.Calendar
+import org.jbox2d.testbed.framework.TestbedModel
 
-class PushOfWarTest extends TestbedTest {
+class PushOfWarTest extends WrappedTestbedTest {
 	override def getTestName = "Push of War Test"
 
 	val objects = new ArrayBuffer[Option[BaseObjectDynamic]]
@@ -132,7 +136,7 @@ class PushOfWarTest extends TestbedTest {
 	}
 
 	override def _save = {
-		System.out.println("Save")
+
 	}
 
 	override def _load = {
