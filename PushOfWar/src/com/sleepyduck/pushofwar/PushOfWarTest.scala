@@ -23,16 +23,20 @@ import com.sleepyduck.pushofwar.model.Triangle
 import com.sleepyduck.pushofwar.model.Wheel
 import com.sleepyduck.pushofwar.model.SteamWheel
 import com.sleepyduck.pushofwar.model.BarHard
-import com.sleepyduck.pushofwar.model.CollissionGroupNone
 import org.jbox2d.testbed.framework.j2d.TestPanelJ2D
 import java.awt.event.MouseWheelEvent
 import java.util.Calendar
 import org.jbox2d.testbed.framework.TestbedModel
+import com.sleepyduck.xml.XMLElement
+
+object PushOfWarTest {
+	val quicksave = new XMLElement("PushOfWar")
+}
 
 class PushOfWarTest extends WrappedTestbedTest {
 	override def getTestName = "Push of War Test"
 
-	val objects = new ArrayBuffer[Option[BaseObjectDynamic]]
+	val objects = new ArrayBuffer[BaseObjectDynamic]
 	var clickObject: Option[BaseObjectDynamic] = None
 	var mouseJoint: Option[MouseJoint] = None
 
@@ -46,9 +50,9 @@ class PushOfWarTest extends WrappedTestbedTest {
 		val width = 150
 
 		// Stage
-		new StaticBox(pow = this, collisionGroup = CollissionGroupStatic(), w = width * 2)
+		new StaticBox(pow = this, collisionGroup = CollissionGroupStatic, w = width * 2)
 
-		val collisionGroups = List(List(CollissionGroupPlayer1(), CollissionGroupPlayer1Alt()), List(CollissionGroupPlayer2(), CollissionGroupPlayer2Alt()))
+		val collisionGroups = List(List(CollissionGroupPlayer1, CollissionGroupPlayer1Alt), List(CollissionGroupPlayer2, CollissionGroupPlayer2Alt))
 		for (i <- 0 to 1) {
 			val sign = -1 + 2 * i
 			// Wheels
@@ -62,28 +66,19 @@ class PushOfWarTest extends WrappedTestbedTest {
 			// Objects
 			this addObject new BarHard(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 5), y = 12)
 			this addObject new Bar(pow = this, collisionGroup = collisionGroups(i)(0), x = sign * (width + 5), y = 10)
-			this addObject new Triangle(pow = this, collisionGroup = collisionGroups(i)(0), x = sign * (width + 2), y = 5, base = 3)
-			this addObject new Cone(pow = this, collisionGroup = collisionGroups(i)(0), x = sign * (width + 8), y = 5, base = 6)
+			this addObject new Triangle(pow = this, collisionGroup = collisionGroups(i)(0), x = sign * (width + 2), y = 5)
+			this addObject new Cone(pow = this, collisionGroup = collisionGroups(i)(0), x = sign * (width + 8), y = 5)
 
 			// Spikes
-			this addObject new Spike(pow = this, collisionGroup = CollissionGroupNone(), x = sign * (width + 5), y = 0)
-
-			// Give base vehicle
-			def body = new Bar(pow = this, collisionGroup = collisionGroups(i)(0), x = sign * (width - 5), y = -6, copied = true)
-			val wheel1 = new Wheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width - 0.5F), y = -6, rotation = sign match { case -1 => CounterClockwise case _ => Clockwise }, copied = true)
-			val wheel2 = new Wheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width - 9.5F), y = -6, rotation = sign match { case -1 => CounterClockwise case _ => Clockwise }, copied = true)
-
-			this addObject body
-			this addObject wheel1
-			this addObject wheel2
-			wheel1 createJoints;
-			wheel2 createJoints;
+			this addObject new Spike(pow = this, x = sign * (width + 5), y = 0)
 		}
+		
+		load
 	}
 
 	override def step(settings: TestbedSettings) = {
 		super.step(settings)
-		objects foreach (o => o map (_ step settings))
+		objects foreach (_ step settings)
 	}
 
 	override def mouseDown(p: Vec2) = {
@@ -91,8 +86,8 @@ class PushOfWarTest extends WrappedTestbedTest {
 		System.out.println("Mouse down at: (" + p.x.toInt + ", " + p.y.toInt + ")")
 		clickObject = takeOne(findObjects(p))
 		clickObject foreach (_ mouseDown p)
-		objects -= clickObject
-		objects prepend clickObject
+		clickObject foreach (objects -= _)
+		clickObject foreach (objects prepend _)
 
 		if (clickObject isDefined) {
 			val body = clickObject.get body
@@ -113,7 +108,7 @@ class PushOfWarTest extends WrappedTestbedTest {
 		clickObject foreach (_ mouseUp)
 		clickObject foreach (_ click)
 		clickObject = None
-		objects foreach (o => o map (_ stop))
+		objects foreach (_ stop)
 
 		mouseJoint foreach (getWorld() destroyJoint _)
 		mouseJoint = None
@@ -130,37 +125,61 @@ class PushOfWarTest extends WrappedTestbedTest {
 			case 83 => spawnSpike(this getWorldMouse)
 			case 10 => start
 			case 116 => save
-			case 117 => load
+			case 117 => reset
 			case _ =>
 		}
 	}
 
 	override def _save = {
-
+		PushOfWarTest.quicksave.children.clear
+		objects filter (_.hasBeenCopied) foreach (obj => PushOfWarTest.quicksave addChild (obj toXMLElement))
+		System.out.println("Save")
+		System.out.println(PushOfWarTest.quicksave.toString)
 	}
 
 	override def _load = {
+		PushOfWarTest.quicksave.children foreach createObject
+		objects filter (_ hasBeenCopied) map (_ initializeJoints)
 		System.out.println("Load")
+	}
+	
+	def createObject(xmlElement:XMLElement) = {
+		val obj = xmlElement.name match {
+			case "Bar" => Option apply (new Bar(this))
+			case "BarHard" => Option apply (new BarHard(this))
+			case "Cone" => Option apply (new Cone(this))
+			case "Spike" => Option apply (new Spike(this))
+			case "SteamWheel" => Option apply (new SteamWheel(this))
+			case "Triangle" => Option apply (new Triangle(this))
+			case "Wheel" => Option apply (new Wheel(this))
+			case _ => 
+				System.out.println("Failed to load " + xmlElement.name)
+				None
+		}
+		obj foreach (_ initialize xmlElement)
+		obj foreach (this addObject _)
 	}
 
 	def spawnSpike(p: Vec2) = {
-		val spike = new Spike(pow = this, collisionGroup = CollissionGroupNone(), x = getWorldMouse().x, y = getWorldMouse().y, copied = true)
-		spike createJoints;
+		val spike = new Spike(pow = this, x = getWorldMouse().x, y = getWorldMouse().y, copied = true)
+		spike createJoints()
 		this addObject spike
 	}
 
-	def takeOne(objs: ArrayBuffer[Option[BaseObjectDynamic]]): Option[BaseObjectDynamic] = {
+	def takeOne(objs: ArrayBuffer[BaseObjectDynamic]): Option[BaseObjectDynamic] = {
 		if (objs isEmpty) None
 		else {
-			val newObjs = objs filter (_ map (_ isSpike) getOrElse false)
-			if (!(newObjs isEmpty)) (newObjs headOption) getOrElse None
-			else (objs headOption) getOrElse None
+			val newObjs = objs filter (_ isSpike)
+			if (!(newObjs isEmpty)) newObjs headOption
+			else objs headOption
 		}
 	}
 
-	def findObjects(p: Vec2) = objects filter (_ map (_ contains p) getOrElse false)
+	def findObjects(p: Vec2) = objects filter (_ contains p)
 
-	def addObject(obj: BaseObjectDynamic) = objects += Option apply obj
+	def addObject(obj: BaseObjectDynamic) = objects += obj
 
-	def start = objects filter (_ map (_ hasBeenCopied) getOrElse false) foreach (o => o foreach (_ activate))
+	def start = objects filter (_ hasBeenCopied) foreach (_ activate)
+	
+	def getObject(id:Int) = objects filter (_.id == id) headOption
 }

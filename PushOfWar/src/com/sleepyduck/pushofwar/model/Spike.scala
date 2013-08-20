@@ -11,11 +11,17 @@ import org.jbox2d.dynamics.joints.RevoluteJointDef
 import org.jbox2d.dynamics.joints.RevoluteJoint
 import org.jbox2d.common.Vec2
 import org.jbox2d.dynamics.Filter
+import com.sleepyduck.xml.XMLElement
+import com.sleepyduck.xml.XMLElement
+import com.sleepyduck.xml.Attribute
+import com.sleepyduck.xml.XMLElement
 
-class Spike(pow: PushOfWarTest, collisionGroup: Filter, x: Float = 0, y: Float = 0, copied: Boolean = false)
+class Spike(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone, x: Float = 0, y: Float = 0, copied: Boolean = false)
 	extends BaseObjectDynamic(pow, collisionGroup, x, y, copied) {
 
-	val joints: ArrayBuffer[Option[RevoluteJoint]] = ArrayBuffer[Option[RevoluteJoint]]()
+	val objects = ArrayBuffer[BaseObjectDynamic]()
+	val joints = ArrayBuffer[RevoluteJoint]()
+	var xmlElement:Option[XMLElement] = None
 
 	override def mouseDown(p: Vec2) = {
 		super.mouseDown(p)
@@ -24,37 +30,55 @@ class Spike(pow: PushOfWarTest, collisionGroup: Filter, x: Float = 0, y: Float =
 
 	override def mouseUp = {
 		super.mouseUp
-		clearJoints
-		createJoints
+		createJoints()
 	}
 
 	def clearJoints = {
-		joints foreach (_ foreach (pow getWorld () destroyJoint _))
+		joints foreach (pow getWorld () destroyJoint _)
 		joints clear ()
+		objects.clear()
 	}
 
-	def createJoints = {
-		joints clear ()
-		val objs = pow findObjects (body getWorldCenter ()) filter (obj => !(obj.get.isSpike) && obj.get.hasBeenCopied)
-		//objs prepend (Option apply this)
-		//for (i <- 0 until objs.length - 1) (joints += addJoint(objs(i), objs(i + 1)))
-		for (i <- 0 until objs.length) (joints += addJoint(Option apply this, objs(i)))
-		for (i <- 0 until objs.length - 1) (joints += addJoint(objs(i), objs(i + 1)))
-		jointsCreated
+	def createJoints(objectsArg: ArrayBuffer[BaseObjectDynamic] = getObjects) = {
+		clearJoints
+		objects ++= objectsArg
+		for (obj <- objects) (joints += addJoint(this, obj))
+		for (i <- 0 until objects.length - 1) (joints += addJoint(objects(i), objects(i + 1)))
 	}
 
-	def jointsCreated = {}
+	def getObjects = pow findObjects (body getWorldCenter ()) filter (obj => obj != this && !(obj isSpike) && (obj hasBeenCopied))
 
-	def addJoint(o1: Option[BaseObjectDynamic], o2: Option[BaseObjectDynamic]) = {
-		if (o1 != o2 && (o1 isDefined) && (o2 isDefined)) Option apply (pow getWorld () createJoint new RevoluteJointDef() {
-			initialize((o1 get).body, (o2 get).body, body getWorldCenter ())
-		}).asInstanceOf[RevoluteJoint]
-		else None
-	}
+	def addJoint(o1: BaseObjectDynamic, o2: BaseObjectDynamic) = (pow getWorld () createJoint new RevoluteJointDef() {
+		initialize(o1.body, o2.body, body getWorldCenter ())
+	}).asInstanceOf[RevoluteJoint]
 
 	def copy = new Spike(pow, collisionGroup, x, y)
 
 	def getShape = new CircleShape { this setRadius 0.3F }
+	
+	override def initialize(element:XMLElement) = {
+		super.initialize(element)
+		xmlElement = Option apply element
+	}
+	
+	override def initializeJoints = {
+		super.initializeJoints
+		val objs = new ArrayBuffer[BaseObjectDynamic]()
+		xmlElement map (el => (el getElement "Joints")) map (_.children) foreach (_ foreach (child => pow getObject (child.getAttribute("id").value.toInt) foreach (objs += _)))
+		createJoints(objs)
+	}
 
 	override def isSpike = true
+
+	override def putAttributes(element: XMLElement) = {
+		super.putAttributes(element)
+		if (joints.length > 0)
+			element addChild (new XMLElement(
+				name = "Joints",
+				children = (objects map (obj => new XMLElement(
+					name = "Joint",
+					attributes = ArrayBuffer[Attribute](new Attribute(
+						name = "id",
+						value = (obj.id.toString))))))))
+	}
 }
