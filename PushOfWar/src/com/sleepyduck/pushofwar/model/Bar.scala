@@ -16,8 +16,8 @@ import org.jbox2d.dynamics.joints.RevoluteJointDef
 import scala.collection.mutable.ArrayBuffer
 import org.jbox2d.dynamics.Filter
 
-case class Bar(pow: PushOfWarTest, collisionGroup: Filter, x: Float = 0, y: Float = 0, w: Float = 1, h: Float)
-	extends BaseObjectDynamic(pow, collisionGroup, x, y) {
+class Bar(pow: PushOfWarTest, collisionGroup: Filter, x: Float = 0, y: Float = 0, w: Float = 10, h: Float = 1, copied: Boolean = false)
+	extends BaseObjectDynamic(pow, collisionGroup, x, y, copied) {
 
 	def copy = new Bar(pow, collisionGroup, x, y, w, h)
 

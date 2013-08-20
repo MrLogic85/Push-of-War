@@ -12,7 +12,8 @@ import org.jbox2d.dynamics.joints.RevoluteJoint
 import org.jbox2d.common.Vec2
 import org.jbox2d.dynamics.Filter
 
-class Spike(pow: PushOfWarTest, collisionGroup: Filter, x: Float = 0, y: Float = 0) extends BaseObjectDynamic(pow, collisionGroup, x, y) {
+class Spike(pow: PushOfWarTest, collisionGroup: Filter, x: Float = 0, y: Float = 0, copied: Boolean = false)
+	extends BaseObjectDynamic(pow, collisionGroup, x, y, copied) {
 
 	val joints: ArrayBuffer[Option[RevoluteJoint]] = ArrayBuffer[Option[RevoluteJoint]]()
 
@@ -34,8 +35,10 @@ class Spike(pow: PushOfWarTest, collisionGroup: Filter, x: Float = 0, y: Float =
 
 	def createJoints = {
 		joints clear ()
-		val objs = pow findObjects (body getWorldCenter ()) filter (_.get != Spike)
-		objs prepend (Option apply this)
+		val objs = pow findObjects (body getWorldCenter ()) filter (obj => !(obj.get.isSpike) && obj.get.hasBeenCopied)
+		//objs prepend (Option apply this)
+		//for (i <- 0 until objs.length - 1) (joints += addJoint(objs(i), objs(i + 1)))
+		for (i <- 0 until objs.length) (joints += addJoint(Option apply this, objs(i)))
 		for (i <- 0 until objs.length - 1) (joints += addJoint(objs(i), objs(i + 1)))
 		jointsCreated
 	}

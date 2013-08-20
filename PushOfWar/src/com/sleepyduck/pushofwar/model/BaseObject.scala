@@ -9,12 +9,14 @@ import org.jbox2d.dynamics.BodyType
 import org.jbox2d.dynamics.FixtureDef
 import org.jbox2d.dynamics.Filter
 
+case class CollissionGroupNone extends Filter { categoryBits = 0x80; maskBits = 0x1 }
 case class CollissionGroupStatic extends Filter { categoryBits = 0x1; maskBits = 0xFF & ~0x1 }
 case class CollissionGroupPlayer1 extends Filter { categoryBits = 0x2; maskBits = 0xFF & ~0x2 & ~0x4 }
 case class CollissionGroupPlayer1Alt extends Filter { categoryBits = 0x4; maskBits = 0xFF & ~0x2 }
 case class CollissionGroupPlayer2 extends Filter { categoryBits = 0x8; maskBits = 0xFF & ~0x8 & ~0x10 }
 case class CollissionGroupPlayer2Alt extends Filter { categoryBits = 0x10; maskBits = 0xFF & ~0x8 }
 
+object CollissionGroupNone {}
 object CollissionGroupStatic {}
 object CollissionGroupPlayer1 {}
 object CollissionGroupPlayer1Alt {}
@@ -40,10 +42,6 @@ abstract class BaseObject(pow: PushOfWarTest, collisionGroup: Filter, x: Float, 
 	def getExtraFixture: List[FixtureDef] = List()
 
 	def step(settings: TestbedSettings) = {}
-
-	def move(distance: Vec2) = {
-		body setTransform ((body getPosition) add distance, body getAngle)
-	}
 
 	def click = {}
 

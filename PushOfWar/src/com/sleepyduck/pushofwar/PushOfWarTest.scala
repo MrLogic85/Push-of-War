@@ -16,11 +16,14 @@ import com.sleepyduck.pushofwar.model.CollissionGroupStatic
 import com.sleepyduck.pushofwar.model.Cone
 import com.sleepyduck.pushofwar.model.RotationEnum.Clockwise
 import com.sleepyduck.pushofwar.model.RotationEnum.CounterClockwise
+import com.sleepyduck.pushofwar.model.RotationEnum.NoEngine
 import com.sleepyduck.pushofwar.model.Spike
 import com.sleepyduck.pushofwar.model.StaticBox
 import com.sleepyduck.pushofwar.model.Triangle
 import com.sleepyduck.pushofwar.model.Wheel
+import com.sleepyduck.pushofwar.model.SteamWheel
 import com.sleepyduck.pushofwar.model.BarHard
+import com.sleepyduck.pushofwar.model.CollissionGroupNone
 
 class PushOfWarTest extends TestbedTest {
 	override def getTestName = "Push of War Test"
@@ -36,32 +39,41 @@ class PushOfWarTest extends TestbedTest {
 
 		objects clear ()
 		clickObject = None
+		val width = 150
 
-		val width = 70
 		// Stage
-		new StaticBox(
-			pow = this,
-			collisionGroup = CollissionGroupStatic(),
-			x = 0,
-			y = -80,
-			w = width,
-			h = 80)
+		new StaticBox(pow = this, collisionGroup = CollissionGroupStatic(), w = width*2)
 
 		val collisionGroups = List(List(CollissionGroupPlayer1(), CollissionGroupPlayer1Alt()), List(CollissionGroupPlayer2(), CollissionGroupPlayer2Alt()))
 		for (i <- 0 to 1) {
-			val sign = -1 + 2*i
+			val sign = -1 + 2 * i
 			// Wheels
-			objects += Option apply (new Wheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * 75, y = 20, rotation = Clockwise, torque = 800))
-			objects += Option apply (new Wheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * 75, y = 15, rotation = CounterClockwise, torque = 800))
+			this addObject new Wheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width+7), y = 15, rotation = Clockwise)
+			this addObject new Wheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width+2), y = 15, rotation = CounterClockwise)
+			this addObject new Wheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width+12), y = 15, rotation = NoEngine, torque = 0)
+			this addObject new SteamWheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width+9), y = 22, rotation = Clockwise)
+			this addObject new SteamWheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width+1), y = 22, rotation = CounterClockwise)
+			this addObject new SteamWheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width+17), y = 22, rotation = NoEngine, torque = 0)
 
 			// Objects
-			objects += Option apply (new BarHard(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * 75, y = 12, w = 10, h = 1))
-			objects += Option apply (new Bar(pow = this, collisionGroup = collisionGroups(i)(0), x = sign * 75, y = 10, w = 10, h = 1))
-			objects += Option apply (new Triangle(pow = this, collisionGroup = collisionGroups(i)(0), x = sign * 72, y = 5, base = 3))
-			objects += Option apply (new Cone(pow = this, collisionGroup = collisionGroups(i)(0), x = sign * 78, y = 5, base = 6))
+			this addObject new BarHard(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width+5), y = 12)
+			this addObject new Bar(pow = this, collisionGroup = collisionGroups(i)(0), x = sign * (width+5), y = 10)
+			this addObject new Triangle(pow = this, collisionGroup = collisionGroups(i)(0), x = sign * (width+2), y = 5, base = 3)
+			this addObject new Cone(pow = this, collisionGroup = collisionGroups(i)(0), x = sign * (width+8), y = 5, base = 6)
 
 			// Spikes
-			objects += Option apply (new Spike(pow = this, collisionGroup = collisionGroups(i)(0), x = sign * 75, y = 0))
+			this addObject new Spike(pow = this, collisionGroup = CollissionGroupNone(), x = sign * (width+5), y = 0)
+
+			// Give base vehicle
+			def body = new Bar(pow = this, collisionGroup = collisionGroups(i)(0), x = sign * (width-5), y = -6, copied = true)
+			val wheel1 = new Wheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width-0.5F), y = -6, rotation = sign match { case -1 => CounterClockwise case _ => Clockwise }, copied = true)
+			val wheel2 = new Wheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width-9.5F), y = -6, rotation = sign match { case -1 => CounterClockwise case _ => Clockwise }, copied = true)
+
+			this addObject body
+			this addObject wheel1
+			this addObject wheel2
+			wheel1 createJoints;
+			wheel2 createJoints;
 		}
 	}
 
@@ -71,7 +83,8 @@ class PushOfWarTest extends TestbedTest {
 	}
 
 	override def mouseDown(p: Vec2) = {
-		//super.mouseDown(p)
+		//super.mouseDown(p) Do not call super!
+		System.out.println("Mouse down at: (" + p.x.toInt + ", " + p.y.toInt + ")")
 		clickObject = takeOne(findObjects(p))
 		clickObject foreach (_ mouseDown p)
 		objects -= clickObject
@@ -107,17 +120,37 @@ class PushOfWarTest extends TestbedTest {
 		mouseJoint foreach (_ setTarget p)
 	}
 
-	override def keyPressed(keyChar: Char, keyCode: Int) = keyChar toUpper match {
-		case 'S' => start
-		case _ =>
+	override def keyPressed(keyChar: Char, keyCode: Int) = {
+		System.out.println("Key pressed: " + keyChar + " (" + keyCode + ")")
+		keyCode match {
+			case 83 => spawnSpike (this getWorldMouse)
+			case 10 => start
+			case 116 => save
+			case 117 => load
+			case _ =>
+		}
+	}
+	
+	override def _save = {
+		System.out.println("Save")
+	}
+	
+	override def _load = {
+		System.out.println("Load")
+	}
+	
+	def spawnSpike(p:Vec2) = {
+				val spike = new Spike(pow = this, collisionGroup = CollissionGroupNone(), x = getWorldMouse().x, y = getWorldMouse().y, copied = true)
+				spike createJoints;
+				this addObject spike
 	}
 
 	def takeOne(objs: ArrayBuffer[Option[BaseObjectDynamic]]): Option[BaseObjectDynamic] = {
 		if (objs isEmpty) None
 		else {
 			val newObjs = objs filter (_ map (_ isSpike) getOrElse false)
-			if (newObjs isEmpty) (objs headOption) getOrElse None
-			else (newObjs headOption) getOrElse None
+			if (!(newObjs isEmpty)) (newObjs headOption) getOrElse None
+			else (objs headOption) getOrElse None
 		}
 	}
 

@@ -10,11 +10,13 @@ import org.jbox2d.dynamics.Filter
 import org.jbox2d.collision.shapes.Shape
 import org.jbox2d.dynamics.FixtureDef
 
-abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter, x: Float, y: Float) extends BaseObject(pow, collisionGroup, x, y) {
+abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter, x: Float, y: Float, copied:Boolean = false) extends BaseObject(pow, collisionGroup, x, y) {
 	var hasBeenCopied = false
+	
+	if (copied) setCopied
 
 	override def getFixture = new FixtureDef {
-		friction = 1
+		friction = 2
 		density = 1
 		isSensor = true
 		shape = getShape
@@ -23,10 +25,16 @@ abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter, x: 
 	override def mouseDown(p: Vec2) = {
 		super.mouseDown(p)
 		if (!hasBeenCopied) {
-			pow addObject (this copy)
-			hasBeenCopied = true
-			body getFixtureList () setSensor false
+			pow addObject copy
+			setCopied
 		}
+	}
+
+	def setCopied = {
+		hasBeenCopied = true
+		body getFixtureList () setSensor false
+		body setAwake true
+		body setSleepingAllowed false
 	}
 
 	def activate = {
@@ -34,8 +42,6 @@ abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter, x: 
 			body setGravityScale 1
 			body setLinearDamping 0
 			body setAngularDamping 0
-			body setAwake true
-			body setSleepingAllowed false
 		}
 	}
 
