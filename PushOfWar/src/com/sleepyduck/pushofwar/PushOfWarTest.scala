@@ -28,9 +28,39 @@ import java.awt.event.MouseWheelEvent
 import java.util.Calendar
 import org.jbox2d.testbed.framework.TestbedModel
 import com.sleepyduck.xml.XMLElement
+import java.io.PrintWriter
+import java.io.File
+import scala.io.Source
+import com.sleepyduck.xml.XMLElementFactory
+import com.sleepyduck.xml.XMLElement
+import com.sleepyduck.pushofwar.model.CollisionGroup
+import com.sleepyduck.pushofwar.model.BaseObjectDynamic
+import com.sleepyduck.pushofwar.model.BaseObjectDynamic
 
 object PushOfWarTest {
-	val quicksave = new XMLElement("PushOfWar")
+	val QuickSave = new XMLElement("PushOfWar")
+	var doLoadFromFile = false
+
+	def saveToFile = {
+		val writer = new PrintWriter(new File("SaveFile.txt"))
+		writer.write(QuickSave toString)
+		writer.close()
+		println("Save to file")
+	}
+
+	def loadFromFile = {
+		def saveText = Source.fromFile("SaveFile.txt") getLines () reduce (_ + _)
+		println(saveText)
+		def headElement = (XMLElementFactory BuildFromXMLString saveText).headOption getOrElse (new XMLElement)
+		QuickSave.children clear ()
+		QuickSave.children ++= headElement.children
+		doLoadFromFile = false
+		println("Load from file")
+	}
+}
+
+object KeyModifier {
+	var Ctrl = false
 }
 
 class PushOfWarTest extends WrappedTestbedTest {
@@ -58,10 +88,10 @@ class PushOfWarTest extends WrappedTestbedTest {
 			// Wheels
 			this addObject new Wheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 7), y = 15, rotation = Clockwise)
 			this addObject new Wheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 2), y = 15, rotation = CounterClockwise)
-			this addObject new Wheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 12), y = 15, rotation = NoEngine, torque = 0)
+			this addObject new Wheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 12), y = 15, rotation = NoEngine)
 			this addObject new SteamWheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 9), y = 22, rotation = Clockwise)
 			this addObject new SteamWheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 1), y = 22, rotation = CounterClockwise)
-			this addObject new SteamWheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 17), y = 22, rotation = NoEngine, torque = 0)
+			this addObject new SteamWheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 17), y = 22, rotation = NoEngine)
 
 			// Objects
 			this addObject new BarHard(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 5), y = 12)
@@ -72,7 +102,7 @@ class PushOfWarTest extends WrappedTestbedTest {
 			// Spikes
 			this addObject new Spike(pow = this, x = sign * (width + 5), y = 0)
 		}
-		
+
 		load
 	}
 
@@ -84,7 +114,10 @@ class PushOfWarTest extends WrappedTestbedTest {
 	override def mouseDown(p: Vec2) = {
 		//super.mouseDown(p) Do not call super!
 		System.out.println("Mouse down at: (" + p.x.toInt + ", " + p.y.toInt + ")")
+		var wasCopied = false
 		clickObject = takeOne(findObjects(p))
+		clickObject = clickObject map (_ getCopyOrThis)
+		clickObject foreach (o => wasCopied = o.hasBeenCopied)
 		clickObject foreach (_ mouseDown p)
 		clickObject foreach (objects -= _)
 		clickObject foreach (objects prepend _)
@@ -122,37 +155,66 @@ class PushOfWarTest extends WrappedTestbedTest {
 	override def keyPressed(keyChar: Char, keyCode: Int) = {
 		System.out.println("Key pressed: " + keyChar + " (" + keyCode + ")")
 		keyCode match {
-			case 83 => spawnSpike(this getWorldMouse)
-			case 10 => start
-			case 116 => save
-			case 117 => reset
+			case 83 => // s
+				spawnSpike(this getWorldMouse)
+			case 10 => // enter
+				quicksave
+				start
+			case 116 => // F5
+				saveToFile
+			case 117 => // F6
+				PushOfWarTest.doLoadFromFile = true
+				reset
+			case 67 => // c
+				PushOfWarTest.QuickSave.children.clear
+				reset
+			case 17 => // Ctrl
+				KeyModifier.Ctrl = true
 			case _ =>
 		}
 	}
 
-	override def _save = {
-		PushOfWarTest.quicksave.children.clear
-		objects filter (_.hasBeenCopied) foreach (obj => PushOfWarTest.quicksave addChild (obj toXMLElement))
-		System.out.println("Save")
-		System.out.println(PushOfWarTest.quicksave.toString)
+	override def keyReleased(keyChar: Char, keyCode: Int) = keyCode match {
+		case 17 => // Ctrl
+			KeyModifier.Ctrl = false
+		case _ =>
+	}
+
+	def quicksave = {
+		PushOfWarTest.QuickSave.children.clear
+		objects filter (_.hasBeenCopied) foreach (obj => PushOfWarTest.QuickSave addChild (obj toXMLElement))
+		println("Save")
+		println(PushOfWarTest.QuickSave.toString)
+	}
+
+	def saveToFile = {
+		quicksave
+		PushOfWarTest saveToFile
 	}
 
 	override def _load = {
-		PushOfWarTest.quicksave.children foreach createObject
+		if (PushOfWarTest.doLoadFromFile == true)
+			PushOfWarTest loadFromFile
+
+		PushOfWarTest.QuickSave.children foreach createObject
 		objects filter (_ hasBeenCopied) map (_ initializeJoints)
-		System.out.println("Load")
+		println("Load")
 	}
-	
-	def createObject(xmlElement:XMLElement) = {
+
+	def createObject(xmlElement: XMLElement) = {
+		def collisionGroup = CollisionGroup.GetByName(xmlElement.getAttribute("collisionGroup").value)
+		def x = xmlElement.getAttribute("x").value.toFloat
+		def y = xmlElement.getAttribute("y").value.toFloat
+		def angle = xmlElement.getAttribute("angle").value.toFloat
 		val obj = xmlElement.name match {
-			case "Bar" => Option apply (new Bar(this))
-			case "BarHard" => Option apply (new BarHard(this))
-			case "Cone" => Option apply (new Cone(this))
-			case "Spike" => Option apply (new Spike(this))
-			case "SteamWheel" => Option apply (new SteamWheel(this))
-			case "Triangle" => Option apply (new Triangle(this))
-			case "Wheel" => Option apply (new Wheel(this))
-			case _ => 
+			case "Bar" => Option apply (new Bar(this, collisionGroup, x, y, angle))
+			case "BarHard" => Option apply (new BarHard(this, collisionGroup, x, y, angle))
+			case "Cone" => Option apply (new Cone(this, collisionGroup, x, y, angle))
+			case "Spike" => Option apply (new Spike(this, collisionGroup, x, y, angle))
+			case "SteamWheel" => Option apply (new SteamWheel(this, collisionGroup, x, y, angle))
+			case "Triangle" => Option apply (new Triangle(this, collisionGroup, x, y, angle))
+			case "Wheel" => Option apply (new Wheel(this, collisionGroup, x, y, angle))
+			case _ =>
 				System.out.println("Failed to load " + xmlElement.name)
 				None
 		}
@@ -162,7 +224,7 @@ class PushOfWarTest extends WrappedTestbedTest {
 
 	def spawnSpike(p: Vec2) = {
 		val spike = new Spike(pow = this, x = getWorldMouse().x, y = getWorldMouse().y, copied = true)
-		spike createJoints()
+		spike createJoints ()
 		this addObject spike
 	}
 
@@ -180,6 +242,6 @@ class PushOfWarTest extends WrappedTestbedTest {
 	def addObject(obj: BaseObjectDynamic) = objects += obj
 
 	def start = objects filter (_ hasBeenCopied) foreach (_ activate)
-	
-	def getObject(id:Int) = objects filter (_.id == id) headOption
+
+	def getObject(id: Int) = objects filter (_.id == id) headOption
 }

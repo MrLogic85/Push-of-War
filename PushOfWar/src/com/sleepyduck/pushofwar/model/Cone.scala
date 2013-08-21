@@ -5,8 +5,8 @@ import org.jbox2d.common.Vec2
 import org.jbox2d.dynamics.Filter
 import org.jbox2d.collision.shapes.PolygonShape
 
-class Cone(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone, x: Float = 0, y: Float = 0)
-	extends BaseObjectDynamic(pow, collisionGroup, x, y) {
+class Cone(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone, x: Float = 0, y: Float = 0, angle:Float = 0)
+	extends BaseObjectDynamic(pow, collisionGroup, x, y, angle) {
 
 	def getShape = new PolygonShape {
 		val bottom = -3.0F * (Math.tan(Math.PI / 6) toFloat)
@@ -18,5 +18,5 @@ class Cone(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone, x: 
 		set(vertices, 3)
 	}
 
-	def copy = new Cone(pow, collisionGroup, x, y)
+	def copy = new Cone(pow, collisionGroup, body.getWorldCenter().x, body.getWorldCenter().y, body.getAngle())
 }

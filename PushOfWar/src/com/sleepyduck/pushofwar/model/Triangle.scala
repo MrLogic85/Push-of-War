@@ -6,8 +6,8 @@ import org.jbox2d.dynamics.FixtureDef
 import org.jbox2d.common.Vec2
 import org.jbox2d.collision.shapes.PolygonShape
 
-class Triangle(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone, x: Float = 0, y: Float = 0)
-	extends BaseObjectDynamic(pow, collisionGroup, x, y) {
+class Triangle(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone, x: Float = 0, y: Float = 0, angle:Float = 0)
+	extends BaseObjectDynamic(pow, collisionGroup, x, y, angle) {
 
 	def getShape = new PolygonShape {
 		val bottom = -1.5F * (Math.tan(Math.PI / 6) toFloat)
@@ -19,5 +19,5 @@ class Triangle(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone,
 		set(vertices, 3)
 	}
 
-	def copy = new Triangle(pow, collisionGroup, x, y)
+	def copy = new Triangle(pow, collisionGroup, body.getWorldCenter().x, body.getWorldCenter().y, body.getAngle())
 }

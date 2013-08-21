@@ -11,7 +11,7 @@ import org.jbox2d.dynamics.Filter
 import org.jbox2d.common.Vec2
 
 class StaticBox(pow: PushOfWarTest, collisionGroup: Filter, w: Float = 1, angle: Float = 3)
-	extends BaseObject(pow, collisionGroup, 0, 0) {
+	extends BaseObject(pow, collisionGroup, 0, 0, 0) {
 
 	def getFixture = new FixtureDef {
 		density = 1

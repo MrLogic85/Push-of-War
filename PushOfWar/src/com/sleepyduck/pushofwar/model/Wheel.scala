@@ -23,9 +23,9 @@ object RotationEnum extends Enumeration {
 }
 import RotationEnum._
 
-class Wheel(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone, x: Float = 0, y: Float = 0, radius: Float = 2,
-	var torque: Float = 1600, speed: Float = 4000, var rotation: Rotation = Clockwise, copied: Boolean = false)
-	extends Spike(pow, collisionGroup, x, y, copied) {
+class Wheel(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone, x: Float = 0, y: Float = 0, angle:Float = 0, radius: Float = 2,
+	var torque: Float = 1200, speed: Float = Float.MaxValue, var rotation: Rotation = Clockwise, copied: Boolean = false)
+	extends Spike(pow, collisionGroup, x, y, angle, copied) {
 
 	def motorJoints = joints filter (_.getBodyA() == Wheel.this.body)
 
@@ -45,29 +45,29 @@ class Wheel(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone, x:
 		super.activate
 		if (hasBeenCopied) {
 			val jts = motorJoints
-			jts foreach (j => (j setMaxMotorTorque (torque / jts.length), j enableMotor true, j setMotorSpeed rotationForce))
+			jts foreach (j => (j setMaxMotorTorque (getTorque / jts.length), j enableMotor true, j setMotorSpeed rotationSpeed))
 		}
 	}
+	
+	def getTorque = rotation match { case NoEngine => 0 case _ =>  torque}
 
 	override def isSpike = false
 
-	override def copy = new Wheel(pow, collisionGroup, x, y, radius, torque, speed, rotation)
+	override def copy = new Wheel(pow, collisionGroup, body.getWorldCenter().x, body.getWorldCenter().y, body.getAngle(), radius, torque, speed, rotation)
 
 	override def getShape = new CircleShape { this setRadius (Wheel.this.radius) }
 
-	def rotationForce = speed * rotationSign
+	def rotationSpeed = speed * rotationSign
 
 	def rotationSign = rotation match { case Clockwise => -1 case CounterClockwise => 1 case NoEngine => 0 }
 
 	override def putAttributes(element: XMLElement) = {
 		super.putAttributes(element)
-		element addAttribute ("torque", torque toString)
 		element addAttribute ("rotation", rotation toString)
 	}
 
 	override def initialize(element: XMLElement) = {
 		super.initialize(element)
-		torque = element.getAttribute("torque").value.toFloat
 		rotation = RotationEnum.fromString(element.getAttribute("rotation").value)
 		val fixture = (body getFixtureList () getNext () getShape ()).asInstanceOf[ChainShape] createChain (arrowVertices, 8)
 	}

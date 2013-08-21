@@ -5,13 +5,18 @@ import org.jbox2d.common.Transform
 import org.jbox2d.common.Vec2
 import org.jbox2d.dynamics.Filter
 import org.jbox2d.dynamics.FixtureDef
-
 import com.sleepyduck.pushofwar.PushOfWarTest
 import com.sleepyduck.xml.XMLElement
 import com.sleepyduck.xml.XMLParsable
+import com.sleepyduck.pushofwar.KeyModifier
+import scala.collection.mutable.ArrayBuffer
 
-abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter, x: Float, y: Float, copied: Boolean = false)
-	extends BaseObject(pow, collisionGroup, x, y) with XMLParsable {
+abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter, x: Float, y: Float, angle: Float = 0, copied: Boolean = false)
+	extends BaseObject(pow, collisionGroup, x, y, angle) with XMLParsable {
+
+	val spikes = ArrayBuffer[BaseObjectDynamic]()
+	val copiedObjects = ArrayBuffer[BaseObjectDynamic]()
+
 	var hasBeenCopied = false
 
 	if (copied) setCopied
@@ -23,12 +28,23 @@ abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter, x: 
 		shape = getShape
 	}
 
-	override def mouseDown(p: Vec2) = {
-		super.mouseDown(p)
-		if (!hasBeenCopied) {
-			pow addObject copy
-			setCopied
-		}
+	override def mouseUp = {
+		super.mouseUp
+		copiedObjects foreach (_.body getFixtureList () setSensor false)
+		copiedObjects clear
+	}
+
+	def getCopyOrThis = {
+		if (!hasBeenCopied || KeyModifier.Ctrl) {
+			var obj: BaseObjectDynamic = null
+			if (KeyModifier.Ctrl)
+				obj = clusterCopy
+			else
+				obj = copy
+			pow addObject obj
+			obj.setCopied
+			obj
+		} else this
 	}
 
 	def setCopied = {
@@ -63,30 +79,50 @@ abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter, x: 
 		element addAttribute ("x", (body getPosition ()).x toString)
 		element addAttribute ("y", (body getPosition ()).y toString)
 		element addAttribute ("angle", body.getAngle().toString)
-		element addAttribute ("velX", body.getLinearVelocity().x.toString)
-		element addAttribute ("velY", body.getLinearVelocity().y.toString)
-		element addAttribute ("velAng", body.getAngularVelocity().toString)
-		element addAttribute ("collissionCategory", (body getFixtureList () getFilterData).categoryBits toString)
-		element addAttribute ("collissionMask", (body getFixtureList () getFilterData).maskBits toString)
+		element addAttribute ("collisionGroup", collisionGroup getClass () getSimpleName ())
 	}
 
 	def initialize(element: XMLElement) = {
 		id = element.getAttribute("id").value.toInt
-		body setTransform(new Vec2(element.getAttribute("x").value.toFloat, element.getAttribute("y").value.toFloat), element.getAttribute("angle").value.toFloat)
-		body setLinearVelocity(new Vec2(element.getAttribute("velX").value.toFloat, element.getAttribute("velY").value.toFloat))
-		body setAngularVelocity(element.getAttribute("velAng").value.toFloat)
-		(body getFixtureList() getFilterData()).categoryBits = element.getAttribute("collissionCategory").value.toInt
-		(body getFixtureList() getFilterData()).maskBits = element.getAttribute("collissionMask").value.toInt
 		setCopied
 	}
-	
+
 	def initializeJoints = {}
 
 	def contains(p: Vec2) = (Option apply (body getFixtureList ())) map (_ testPoint (p)) getOrElse false
+
+	def clusterCopy = {
+		val connectedObjectsProcessed = ArrayBuffer[BaseObjectDynamic](this)
+		val connectedObjects = getConnectedObjects
+		while (connectedObjects.length > 0) {
+			val obj = connectedObjects.head
+			connectedObjects -= obj
+			if (connectedObjectsProcessed find (_ == obj) isEmpty) {
+				connectedObjectsProcessed += obj
+				connectedObjects ++= obj.getConnectedObjects
+			}
+		}
+		val mappedObjects = connectedObjectsProcessed map (obj => (obj, obj copy))
+		val thisCopy = (mappedObjects find (objPair => objPair._1 == this) head)._2
+		mappedObjects foreach (p => (p._1.body getFixtureList () setSensor true,
+			thisCopy.copiedObjects += p._1,
+			pow addObject p._2,
+			p._2 setCopied,
+			p._2 copyJoints mappedObjects))
+		thisCopy
+	}
+
+	def getConnectedObjects: ArrayBuffer[BaseObjectDynamic] = spikes
+
+	def isConnectedTo(obj: BaseObjectDynamic) = false
 
 	def copy: BaseObjectDynamic
 
 	def isSpike = false
 
+	def addSpike(spike: BaseObjectDynamic) = spikes += spike
+
 	def getShape: Shape
+
+	def copyJoints(map: ArrayBuffer[(BaseObjectDynamic, BaseObjectDynamic)]) = {}
 }

@@ -7,12 +7,12 @@ import org.jbox2d.collision.shapes.PolygonShape
 import org.jbox2d.dynamics.FixtureDef
 import org.jbox2d.collision.shapes.ChainShape
 
-class BarHard(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone, x: Float = 0, y: Float = 0, w: Float = 10, h: Float = 1, copied: Boolean = false)
-	extends Bar(pow, collisionGroup, x, y, w, h, copied) {
+class BarHard(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone, x: Float = 0, y: Float = 0, angle:Float = 0, w: Float = 10, h: Float = 1, copied: Boolean = false)
+	extends Bar(pow, collisionGroup, x, y, angle, w, h, copied) {
 	
 	body getFixtureList() setDensity 10
 
-	override def copy = new BarHard(pow, collisionGroup, x, y, w, h)
+	override def copy = new BarHard(pow, collisionGroup, body.getWorldCenter().x, body.getWorldCenter().y, body.getAngle(), w, h)
 	
 	override def getExtraFixture = {
 		List(new FixtureDef {
