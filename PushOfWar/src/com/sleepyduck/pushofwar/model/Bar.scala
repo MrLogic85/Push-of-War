@@ -18,7 +18,7 @@ import org.jbox2d.dynamics.Filter
 import com.sleepyduck.xml.XMLElement
 import com.sleepyduck.xml.XMLElement
 
-class Bar(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone, x: Float = 0, y: Float = 0, angle:Float = 0, w: Float = 10, h: Float = 1, copied: Boolean = false)
+class Bar(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupStatic, x: Float = 0, y: Float = 0, angle:Float = 0, w: Float = 10, h: Float = 1, copied: Boolean = false)
 	extends BaseObjectDynamic(pow, collisionGroup, x, y, angle, copied) {
 
 	def copy = new Bar(pow, collisionGroup, body.getWorldCenter().x, body.getWorldCenter().y, body.getAngle(), w, h)

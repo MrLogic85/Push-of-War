@@ -36,6 +36,9 @@ import com.sleepyduck.xml.XMLElement
 import com.sleepyduck.pushofwar.model.CollisionGroup
 import com.sleepyduck.pushofwar.model.BaseObjectDynamic
 import com.sleepyduck.pushofwar.model.BaseObjectDynamic
+import java.io.FileNotFoundException
+import com.sleepyduck.pushofwar.model.CollissionGroupPlayer1None
+import com.sleepyduck.pushofwar.model.CollissionGroupPlayer2None
 
 object PushOfWarTest {
 	val QuickSave = new XMLElement("PushOfWar")
@@ -49,12 +52,16 @@ object PushOfWarTest {
 	}
 
 	def loadFromFile = {
-		def saveText = Source.fromFile("SaveFile.txt") getLines () reduce (_ + _)
-		println(saveText)
-		def headElement = (XMLElementFactory BuildFromXMLString saveText).headOption getOrElse (new XMLElement)
-		QuickSave.children clear ()
-		QuickSave.children ++= headElement.children
-		doLoadFromFile = false
+		try {
+			def saveText = Source.fromFile("SaveFile.txt") getLines () reduce (_ + _)
+			println(saveText)
+			def headElement = (XMLElementFactory BuildFromXMLString saveText).headOption getOrElse (new XMLElement)
+			QuickSave.children clear ()
+			QuickSave.children ++= headElement.children
+			doLoadFromFile = false
+		} catch {
+			case e: FileNotFoundException =>
+		}
 		println("Load from file")
 	}
 }
@@ -82,16 +89,16 @@ class PushOfWarTest extends WrappedTestbedTest {
 		// Stage
 		new StaticBox(pow = this, collisionGroup = CollissionGroupStatic, w = width * 2)
 
-		val collisionGroups = List(List(CollissionGroupPlayer1, CollissionGroupPlayer1Alt), List(CollissionGroupPlayer2, CollissionGroupPlayer2Alt))
+		val collisionGroups = List(List(CollissionGroupPlayer1, CollissionGroupPlayer1Alt, CollissionGroupPlayer1None), List(CollissionGroupPlayer2, CollissionGroupPlayer2Alt, CollissionGroupPlayer2None))
 		for (i <- 0 to 1) {
 			val sign = -1 + 2 * i
 			// Wheels
 			this addObject new Wheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 7), y = 15, rotation = Clockwise)
 			this addObject new Wheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 2), y = 15, rotation = CounterClockwise)
 			this addObject new Wheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 12), y = 15, rotation = NoEngine)
-			this addObject new SteamWheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 9), y = 22, rotation = Clockwise)
-			this addObject new SteamWheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 1), y = 22, rotation = CounterClockwise)
-			this addObject new SteamWheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 17), y = 22, rotation = NoEngine)
+			this addObject new SteamWheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 9), y = 22, rotationSW = Clockwise)
+			this addObject new SteamWheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 1), y = 22, rotationSW = CounterClockwise)
+			this addObject new SteamWheel(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 17), y = 22, rotationSW = NoEngine)
 
 			// Objects
 			this addObject new BarHard(pow = this, collisionGroup = collisionGroups(i)(1), x = sign * (width + 5), y = 12)
@@ -100,7 +107,7 @@ class PushOfWarTest extends WrappedTestbedTest {
 			this addObject new Cone(pow = this, collisionGroup = collisionGroups(i)(0), x = sign * (width + 8), y = 5)
 
 			// Spikes
-			this addObject new Spike(pow = this, x = sign * (width + 5), y = 0)
+			this addObject new Spike(pow = this,  collisionGroup = collisionGroups(i)(2), x = sign * (width + 5), y = 0)
 		}
 
 		load
@@ -244,4 +251,12 @@ class PushOfWarTest extends WrappedTestbedTest {
 	def start = objects filter (_ hasBeenCopied) foreach (_ activate)
 
 	def getObject(id: Int) = objects filter (_.id == id) headOption
+
+	def getUniqueId:Int = {
+		val id = (Math.random * Int.MaxValue).toInt
+		if (getObject(id) isEmpty)
+			id
+		else
+			getUniqueId
+	}
 }

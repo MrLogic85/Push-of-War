@@ -6,7 +6,7 @@ import org.jbox2d.dynamics.FixtureDef
 import org.jbox2d.common.Vec2
 import org.jbox2d.collision.shapes.PolygonShape
 
-class Triangle(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone, x: Float = 0, y: Float = 0, angle:Float = 0)
+class Triangle(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupStatic, x: Float = 0, y: Float = 0, angle:Float = 0)
 	extends BaseObjectDynamic(pow, collisionGroup, x, y, angle) {
 
 	def getShape = new PolygonShape {

@@ -11,8 +11,10 @@ import com.sleepyduck.xml.XMLParsable
 import com.sleepyduck.pushofwar.KeyModifier
 import scala.collection.mutable.ArrayBuffer
 
-abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter, x: Float, y: Float, angle: Float = 0, copied: Boolean = false)
+abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter =CollissionGroupStatic, x: Float = 0, y: Float = 0, angle: Float = 0, copied: Boolean = false)
 	extends BaseObject(pow, collisionGroup, x, y, angle) with XMLParsable {
+
+	var cost = 10
 
 	val spikes = ArrayBuffer[BaseObjectDynamic]()
 	val copiedObjects = ArrayBuffer[BaseObjectDynamic]()
@@ -37,12 +39,13 @@ abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter, x: 
 	def getCopyOrThis = {
 		if (!hasBeenCopied || KeyModifier.Ctrl) {
 			var obj: BaseObjectDynamic = null
-			if (KeyModifier.Ctrl)
+			if (KeyModifier.Ctrl) {
 				obj = clusterCopy
-			else
+			} else {
 				obj = copy
-			pow addObject obj
-			obj.setCopied
+				pow addObject obj
+				obj.setCopied
+			}
 			obj
 		} else this
 	}
@@ -104,11 +107,11 @@ abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter, x: 
 		}
 		val mappedObjects = connectedObjectsProcessed map (obj => (obj, obj copy))
 		val thisCopy = (mappedObjects find (objPair => objPair._1 == this) head)._2
-		mappedObjects foreach (p => (p._1.body getFixtureList () setSensor true,
-			thisCopy.copiedObjects += p._1,
-			pow addObject p._2,
-			p._2 setCopied,
-			p._2 copyJoints mappedObjects))
+		mappedObjects foreach (p => p._1.body getFixtureList () setSensor true)
+		mappedObjects foreach (p => thisCopy.copiedObjects += p._1)
+		mappedObjects foreach (p => pow addObject p._2)
+		mappedObjects foreach (p => p._2 setCopied)
+		mappedObjects foreach (p => p._2 copyJoints mappedObjects)
 		thisCopy
 	}
 
@@ -122,7 +125,19 @@ abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter, x: 
 
 	def addSpike(spike: BaseObjectDynamic) = spikes += spike
 
+	def removeSpike(spike: BaseObjectDynamic) = spikes -= spike
+
 	def getShape: Shape
 
 	def copyJoints(map: ArrayBuffer[(BaseObjectDynamic, BaseObjectDynamic)]) = {}
+
+	def playerId = collisionGroup match {
+		case CollissionGroupStatic => 0
+		case CollissionGroupPlayer1 => 1
+		case CollissionGroupPlayer1Alt => 1
+		case CollissionGroupPlayer1None => 1
+		case CollissionGroupPlayer2 => 2
+		case CollissionGroupPlayer2Alt => 2
+		case CollissionGroupPlayer2None => 2
+	}
 }

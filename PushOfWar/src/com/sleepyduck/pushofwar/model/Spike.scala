@@ -17,7 +17,7 @@ import com.sleepyduck.xml.XMLElement
 import com.sleepyduck.xml.Attribute
 import com.sleepyduck.xml.XMLElement
 
-class Spike(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone, x: Float = 0, y: Float = 0, angle: Float = 0, copied: Boolean = false)
+class Spike(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupStatic, x: Float = 0, y: Float = 0, angle: Float = 0, copied: Boolean = false)
 	extends BaseObjectDynamic(pow, collisionGroup, x, y, angle, copied) {
 
 	val objects = ArrayBuffer[BaseObjectDynamic]()
@@ -32,12 +32,14 @@ class Spike(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone, x:
 
 	override def mouseUp = {
 		super.mouseUp
-		createJoints()
+		if (!KeyModifier.Ctrl)
+			createJoints()
 	}
 
 	def clearJoints = {
 		joints foreach (pow getWorld () destroyJoint _)
 		joints clear ()
+		objects foreach (_ removeSpike this)
 		objects.clear()
 	}
 
@@ -98,6 +100,5 @@ class Spike(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupNone, x:
 		def findOldObject(obj: BaseObjectDynamic) = (map find (objPair => objPair._2 == obj) get)._1
 		def findNewObject(obj: BaseObjectDynamic) = (map find (objPair => objPair._1 == obj) get)._2
 		createJoints(findOldObject(this).asInstanceOf[Spike].objects map (findNewObject _))
-
 	}
 }
