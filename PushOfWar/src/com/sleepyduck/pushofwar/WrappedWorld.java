@@ -23,8 +23,10 @@ import org.jbox2d.pooling.IWorldPool;
 import org.jbox2d.pooling.arrays.Vec2Array;
 import org.jbox2d.pooling.normal.DefaultWorldPool;
 
+import com.sleepyduck.pushofwar.model.ColorChooser;
+
 public abstract class WrappedWorld extends World {
-	private static Integer LIQUID_INT = new Integer(1234598372);
+	public static Integer LIQUID_INT = new Integer(1234598372);
 	private float liquidLength = .12f;
 	private float averageLinearVel = -1;
 	private final Vec2 liquidOffset = new Vec2();
@@ -47,11 +49,12 @@ public abstract class WrappedWorld extends World {
 	private final Vec2Array tlvertices = new Vec2Array();
 
 	public WrappedWorld(Vec2 gravity, IWorldPool argPool) {
-	    this(gravity, argPool, new DynamicTree());
+		this(gravity, argPool, new DynamicTree());
 	}
 
 	public WrappedWorld(Vec2 gravity) {
-	    this(gravity, new DefaultWorldPool(WORLD_POOL_SIZE, WORLD_POOL_CONTAINER_SIZE));
+		this(gravity, new DefaultWorldPool(WORLD_POOL_SIZE,
+				WORLD_POOL_CONTAINER_SIZE));
 	}
 
 	public WrappedWorld(Vec2 gravity, IWorldPool argPool,
@@ -71,22 +74,19 @@ public abstract class WrappedWorld extends World {
 			for (Body b = getBodyList(); b != null; b = b.getNext()) {
 				xf.set(b.getTransform());
 				for (Fixture f = b.getFixtureList(); f != null; f = f.getNext()) {
-					if (b.isActive() == false) {
+					if (f.getUserData() instanceof ColorChooser)
+						((ColorChooser) f.getUserData()).setColor(b, color);
+					else if (b.isActive() == false)
 						color.set(0.5f, 0.5f, 0.3f);
-						drawShape(f, xf, color);
-					} else if (b.getType() == BodyType.STATIC) {
+					else if (b.getType() == BodyType.STATIC)
 						color.set(0.5f, 0.9f, 0.3f);
-						drawShape(f, xf, color);
-					} else if (b.getType() == BodyType.KINEMATIC) {
+					else if (b.getType() == BodyType.KINEMATIC)
 						color.set(0.5f, 0.5f, 0.9f);
-						drawShape(f, xf, color);
-					} else if (b.isAwake() == false) {
+					else if (b.isAwake() == false)
 						color.set(0.5f, 0.5f, 0.5f);
-						drawShape(f, xf, color);
-					} else {
+					else
 						color.set(0.9f, 0.7f, 0.7f);
-						drawShape(f, xf, color);
-					}
+					drawShape(f, xf, color);
 				}
 			}
 		}

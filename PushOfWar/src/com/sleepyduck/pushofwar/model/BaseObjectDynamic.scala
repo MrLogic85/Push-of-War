@@ -11,10 +11,11 @@ import com.sleepyduck.xml.XMLParsable
 import com.sleepyduck.pushofwar.KeyModifier
 import scala.collection.mutable.ArrayBuffer
 
-abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter =CollissionGroupStatic, x: Float = 0, y: Float = 0, angle: Float = 0, copied: Boolean = false)
-	extends BaseObject(pow, collisionGroup, x, y, angle) with XMLParsable {
+abstract class BaseObjectDynamic(pow: PushOfWarTest, x: Float = 0, y: Float = 0, angle: Float = 0, copied: Boolean = false)
+	extends BaseObject(pow, x, y, angle) with XMLParsable with CollisionNormal {
 
 	var cost = 10
+	var playerId = 0
 
 	val spikes = ArrayBuffer[BaseObjectDynamic]()
 	val copiedObjects = ArrayBuffer[BaseObjectDynamic]()
@@ -28,6 +29,7 @@ abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter =Col
 		density = 1
 		isSensor = true
 		shape = getShape
+		userData = ColorChooser
 	}
 
 	override def mouseUp = {
@@ -39,11 +41,12 @@ abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter =Col
 	def getCopyOrThis = {
 		if (!hasBeenCopied || KeyModifier.Ctrl) {
 			var obj: BaseObjectDynamic = null
-			if (KeyModifier.Ctrl) {
+			if (KeyModifier.Ctrl && !(body getFixtureList () isSensor ())) {
 				obj = clusterCopy
 			} else {
 				obj = copy
 				pow addObject obj
+				obj setPlayerId playerId
 				obj.setCopied
 			}
 			obj
@@ -82,11 +85,12 @@ abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter =Col
 		element addAttribute ("x", (body getPosition ()).x toString)
 		element addAttribute ("y", (body getPosition ()).y toString)
 		element addAttribute ("angle", body.getAngle().toString)
-		element addAttribute ("collisionGroup", collisionGroup getClass () getSimpleName ())
+		element addAttribute ("playerId", playerId toString)
 	}
 
 	def initialize(element: XMLElement) = {
 		id = element.getAttribute("id").value.toInt
+		setPlayerId(element.getAttribute("playerId").value.toInt)
 		setCopied
 	}
 
@@ -110,6 +114,7 @@ abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter =Col
 		mappedObjects foreach (p => p._1.body getFixtureList () setSensor true)
 		mappedObjects foreach (p => thisCopy.copiedObjects += p._1)
 		mappedObjects foreach (p => pow addObject p._2)
+		mappedObjects foreach (p => p._2 setPlayerId p._1.playerId)
 		mappedObjects foreach (p => p._2 setCopied)
 		mappedObjects foreach (p => p._2 copyJoints mappedObjects)
 		thisCopy
@@ -121,6 +126,8 @@ abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter =Col
 
 	def copy: BaseObjectDynamic
 
+	def destroy = {}
+
 	def isSpike = false
 
 	def addSpike(spike: BaseObjectDynamic) = spikes += spike
@@ -131,13 +138,12 @@ abstract class BaseObjectDynamic(pow: PushOfWarTest, collisionGroup: Filter =Col
 
 	def copyJoints(map: ArrayBuffer[(BaseObjectDynamic, BaseObjectDynamic)]) = {}
 
-	def playerId = collisionGroup match {
-		case CollissionGroupStatic => 0
-		case CollissionGroupPlayer1 => 1
-		case CollissionGroupPlayer1Alt => 1
-		case CollissionGroupPlayer1None => 1
-		case CollissionGroupPlayer2 => 2
-		case CollissionGroupPlayer2Alt => 2
-		case CollissionGroupPlayer2None => 2
+	def setPlayerId(id: Int) = {
+		playerId = id
+		body getFixtureList () setFilterData getCollisionGroup(playerId)
+	}
+
+	override def toString = {
+		(getClass() getSimpleName ()) + "[id = \"" + id + "\", playerId = \"" + playerId + "\"]"
 	}
 }

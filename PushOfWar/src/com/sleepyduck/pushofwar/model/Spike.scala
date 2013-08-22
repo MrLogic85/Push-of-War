@@ -17,8 +17,8 @@ import com.sleepyduck.xml.XMLElement
 import com.sleepyduck.xml.Attribute
 import com.sleepyduck.xml.XMLElement
 
-class Spike(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupStatic, x: Float = 0, y: Float = 0, angle: Float = 0, copied: Boolean = false)
-	extends BaseObjectDynamic(pow, collisionGroup, x, y, angle, copied) {
+class Spike(pow: PushOfWarTest, x: Float = 0, y: Float = 0, angle: Float = 0, copied: Boolean = false)
+	extends BaseObjectDynamic(pow, x, y, angle, copied) with CollisionNone {
 
 	val objects = ArrayBuffer[BaseObjectDynamic]()
 	val joints = ArrayBuffer[RevoluteJoint]()
@@ -50,6 +50,8 @@ class Spike(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupStatic, 
 		if (objects.length > 1)
 			objects reduce addJoint
 	}
+	
+	override def destroy = clearJoints
 
 	def getObjects = pow findObjects (body getWorldCenter ()) filter (obj => obj != this && !(obj isSpike) && (obj hasBeenCopied))
 
@@ -60,7 +62,7 @@ class Spike(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupStatic, 
 		right
 	}
 
-	def copy = new Spike(pow, collisionGroup, body.getWorldCenter().x, body.getWorldCenter().y, body.getAngle())
+	def copy = new Spike(pow, body.getWorldCenter().x, body.getWorldCenter().y, body.getAngle())
 
 	def getShape = new CircleShape { this setRadius 0.3F }
 

@@ -11,21 +11,14 @@ import org.jbox2d.dynamics.joints.Joint
 import org.jbox2d.dynamics.joints.RevoluteJoint
 import com.sleepyduck.pushofwar.PushOfWarTest
 import com.sleepyduck.xml.XMLElement
+import com.sleepyduck.pushofwar.WrappedWorld
+import com.sleepyduck.pushofwar.model.RotationEnum._
 
-object RotationEnum extends Enumeration {
-	type Rotation = Value
-	val Clockwise, CounterClockwise, NoEngine = Value
-	def fromString(str: String) = str match {
-		case "Clockwise" => Clockwise
-		case "CounterClockwise" => CounterClockwise
-		case "NoEngine" => NoEngine
-	}
-}
-import RotationEnum._
-
-class Wheel(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupStatic, x: Float = 0, y: Float = 0, angle: Float = 0, radius: Float = 2,
+class Wheel(pow: PushOfWarTest, x: Float = 0, y: Float = 0, angle: Float = 0, radius: Float = 2,
 	var torque: Float = 1200, speed: Float = Float.MaxValue, var rotation: Rotation = NoEngine, copied: Boolean = false)
-	extends Spike(pow, collisionGroup, x, y, angle, copied) {
+	extends Spike(pow, x, y, angle, copied) with CollisionHard {
+	
+	body getFixtureList () setUserData ColorChooserAlt
 
 	def motorJoints = joints filter (_.getBodyA() == Wheel.this.body)
 
@@ -53,7 +46,7 @@ class Wheel(pow: PushOfWarTest, collisionGroup: Filter = CollissionGroupStatic, 
 
 	override def isSpike = false
 
-	override def copy = new Wheel(pow, collisionGroup, body.getWorldCenter().x, body.getWorldCenter().y, body.getAngle(), radius, torque, speed, rotation)
+	override def copy = new Wheel(pow, body.getWorldCenter().x, body.getWorldCenter().y, body.getAngle(), radius, torque, speed, rotation)
 
 	override def getShape = new CircleShape { this setRadius (Wheel.this.radius) }
 

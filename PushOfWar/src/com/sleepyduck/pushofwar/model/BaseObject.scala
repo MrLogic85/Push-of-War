@@ -38,7 +38,7 @@ class CollissionGroupPlayer2 extends Filter
 class CollissionGroupPlayer2Alt extends Filter
 class CollissionGroupPlayer2None extends Filter
 
-abstract class BaseObject(pow: PushOfWarTest, collisionGroup: Filter, x: Float, y: Float, angle: Float = 0) {
+abstract class BaseObject(pow: PushOfWarTest, x: Float, y: Float, angle: Float = 0) {
 
 	var id = pow getUniqueId
 
@@ -55,7 +55,7 @@ abstract class BaseObject(pow: PushOfWarTest, collisionGroup: Filter, x: Float, 
 	getExtraFixture foreach (body createFixture _)
 	body createFixture getFixture
 
-	body getFixtureList () setFilterData collisionGroup
+	body getFixtureList () setFilterData CollissionGroupStatic
 
 	def getFixture: FixtureDef
 	def getExtraFixture: List[FixtureDef] = List()
