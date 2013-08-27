@@ -104,7 +104,8 @@ abstract class BaseObjectDynamic(pow: PushOfWarTest, x: Float = 0, y: Float = 0,
 
 	def clusterCopy = {
 		val connectedObjectsProcessed = ArrayBuffer[BaseObjectDynamic](this)
-		val connectedObjects = getConnectedObjects
+		val connectedObjects = ArrayBuffer[BaseObjectDynamic]()
+		connectedObjects ++= getConnectedObjects
 		while (connectedObjects.length > 0) {
 			val obj = connectedObjects.head
 			connectedObjects -= obj

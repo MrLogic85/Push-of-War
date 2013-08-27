@@ -13,6 +13,12 @@ import org.jbox2d.testbed.framework.TestbedSettings
 import com.sleepyduck.pushofwar.model.Bar
 import com.sleepyduck.pushofwar.model.BarHard
 import com.sleepyduck.pushofwar.model.BaseObjectDynamic
+import com.sleepyduck.pushofwar.model.BaseObjectDynamic
+import com.sleepyduck.pushofwar.model.BaseObjectDynamic
+import com.sleepyduck.pushofwar.model.BaseObjectDynamic
+import com.sleepyduck.pushofwar.model.BaseObjectPlayer
+import com.sleepyduck.pushofwar.model.BaseObjectPlayer
+import com.sleepyduck.pushofwar.model.BaseObjectPlayer
 import com.sleepyduck.pushofwar.model.Cone
 import com.sleepyduck.pushofwar.model.RotationEnum.Clockwise
 import com.sleepyduck.pushofwar.model.RotationEnum.CounterClockwise
@@ -22,21 +28,23 @@ import com.sleepyduck.pushofwar.model.StaticBox
 import com.sleepyduck.pushofwar.model.SteamWheel
 import com.sleepyduck.pushofwar.model.Triangle
 import com.sleepyduck.pushofwar.model.Wheel
+import com.sleepyduck.xml.Attribute
+import com.sleepyduck.xml.XMLElement
+import com.sleepyduck.xml.XMLElement
 import com.sleepyduck.xml.XMLElement
 import com.sleepyduck.xml.XMLElementFactory
-import com.sleepyduck.pushofwar.model.BaseObjectPlayer
-import com.sleepyduck.pushofwar.model.BaseObjectPlayer
-import com.sleepyduck.pushofwar.model.BaseObjectDynamic
-import com.sleepyduck.pushofwar.model.BaseObjectDynamic
-import com.sleepyduck.pushofwar.model.BaseObjectPlayer
-import com.sleepyduck.pushofwar.model.BaseObjectDynamic
-import com.sleepyduck.xml.XMLElement
-import com.sleepyduck.xml.XMLElement
-import com.sleepyduck.xml.Attribute
-import akka.actor.ActorSystem
+import com.typesafe.config.ConfigFactory
 import akka.actor.Actor
 import akka.actor.ActorLogging
+import akka.actor.ActorRef
+import akka.actor.ActorSystem
 import akka.actor.Props
+import akka.actor.Identify
+import akka.actor.ActorIdentity
+import scala.concurrent.duration.Duration
+import scala.concurrent.duration.DurationInt
+import akka.actor.ReceiveTimeout
+import com.sleepyduck.xml.XMLElement
 
 object PushOfWarTest {
 	val QuickSave = new XMLElement("PushOfWar")
@@ -73,6 +81,19 @@ object PushOfWarTest {
 		}
 		println("Load from file")
 	}
+
+	def loadPlayer1ToPlayer2From(element: XMLElement) = {
+		PushOfWarTest.QuickSave.getElement("Player2").getAttribute("points").value = element.getElement("Player1").getAttribute("points").value
+		val player2Objs = element.getElement("Objects").children filter (_.getAttribute("playerId").value.toInt == 1)
+		player2Objs foreach (_.getAttribute("playerId").value = 2.toString)
+		player2Objs foreach (el => el.getAttribute("x").value = (-1.0F * el.getAttribute("x").value.toFloat).toString)
+		
+		val player1Objs = PushOfWarTest.QuickSave.getElement("Objects").children filter (_.getAttribute("playerId").value.toInt == 1)
+		
+		PushOfWarTest.QuickSave.getElement("Objects").children.clear
+		PushOfWarTest.QuickSave.getElement("Objects").children ++= player1Objs
+		PushOfWarTest.QuickSave.getElement("Objects").children ++= player2Objs 
+	}
 }
 
 object KeyModifier {
@@ -91,6 +112,7 @@ class PushOfWarTest extends WrappedTestbedTest {
 	var timer = 0L
 	val oneSecond = 1000L
 	val previousDistance = Array(0, 0)
+	var remoteAddress = "127.0.0.1"
 
 	override def initTest(argDeserialized: Boolean) = {
 		setTitle("Push of War")
@@ -237,6 +259,15 @@ class PushOfWarTest extends WrappedTestbedTest {
 	override def keyPressed(keyChar: Char, keyCode: Int) = {
 		System.out.println("Key pressed: " + keyChar + " (" + keyCode + ")")
 		keyCode match {
+			case 67 => // c
+				PushOfWarTest.running = false
+				PushOfWarTest.Reset
+				reset
+			case 68 => // d
+				if (!PushOfWarTest.running) {
+					quicksave
+					senderActor ! PushOfWarTest.QuickSave.toString
+				}
 			case 72 => // h
 				setShowInfo(!getShowInfo())
 			case 83 => // s
@@ -252,10 +283,6 @@ class PushOfWarTest extends WrappedTestbedTest {
 			case 117 => // F6
 				PushOfWarTest.running = false
 				PushOfWarTest.doLoadFromFile = true
-				reset
-			case 67 => // c
-				PushOfWarTest.running = false
-				PushOfWarTest.Reset
 				reset
 			case 16 => // Shift
 				KeyModifier.Shift = true
@@ -401,14 +428,45 @@ class PushOfWarTest extends WrappedTestbedTest {
 		}
 	}
 
-	val system = ActorSystem("MySystem")
-	val greeter = system.actorOf(Props[GreetingActor], name = "greeter")
-	greeter ! Greeting("Charlie Parker")
-}
-case class Greeting(who: String)
+	def recieverCallback(msg: String) = {}
 
-class GreetingActor extends Actor with ActorLogging {
+	//#setup
+	val systemRecieve = ActorSystem("PushOfWar", ConfigFactory.load.getConfig("reciever"))
+	val recieveActor = systemRecieve.actorOf(Props(classOf[Reciever], this), "reciever")
+
+	val systemRemote = ActorSystem("PushOfWar", ConfigFactory.load.getConfig("remotelookup"))
+	val remotePath = s"akka.tcp://PushOfWar@$remoteAddress:2552/user/reciever"
+	val senderActor = systemRemote.actorOf(Props(classOf[Sender], remotePath), "sender")
+
+}
+
+class Reciever(callback: PushOfWarTest) extends Actor {
 	def receive = {
-		case Greeting(who) => log.info("Hello " + who)
+		case msg: String =>
+			callback.quicksave
+			PushOfWarTest loadPlayer1ToPlayer2From XMLElementFactory.BuildFromXMLString(msg).head
+			callback.reset
+	}
+}
+
+class Sender(path: String) extends Actor {
+
+	context.setReceiveTimeout(3.seconds)
+	sendIdentifyRequest()
+
+	def sendIdentifyRequest(): Unit =
+		context.actorSelection(path) ! Identify(path)
+
+	def receive = {
+		case ActorIdentity(`path`, Some(actor)) =>
+			context.setReceiveTimeout(Duration.Undefined)
+			context.become(active(actor))
+		case ActorIdentity(`path`, None) => println(s"Remote actor not availible: $path")
+		case ReceiveTimeout => sendIdentifyRequest()
+		case _ => println("Not ready yet")
+	}
+
+	def active(actor: ActorRef): Actor.Receive = {
+		case str: String => actor ! str
 	}
 }
