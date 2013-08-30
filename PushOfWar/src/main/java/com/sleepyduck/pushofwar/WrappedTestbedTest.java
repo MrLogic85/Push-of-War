@@ -191,6 +191,7 @@ public abstract class WrappedTestbedTest extends TestbedTest {
 		argWorld.setDebugDraw(model.getDebugDraw());
 
 		if (hasCachedCamera) {
+			setCachedCameraPos(getDebugDraw().getViewportTranform().getCenter());
 			setCamera(cachedCameraPos, cachedCameraScale);
 		} else {
 			setCamera(getDefaultCameraPos(), getDefaultCameraScale());

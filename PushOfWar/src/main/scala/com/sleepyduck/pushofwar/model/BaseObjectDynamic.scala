@@ -1,16 +1,18 @@
 package com.sleepyduck.pushofwar.model
 
+import scala.Option.option2Iterable
+import scala.collection.mutable.ArrayBuffer
+
 import org.jbox2d.collision.shapes.Shape
 import org.jbox2d.common.Transform
 import org.jbox2d.common.Vec2
-import org.jbox2d.dynamics.Filter
 import org.jbox2d.dynamics.FixtureDef
+
 import com.sleepyduck.pushofwar.PushOfWarTest
+import com.sleepyduck.pushofwar.util.KeyModifier
+import com.sleepyduck.pushofwar.util.Player
 import com.sleepyduck.xml.XMLElement
 import com.sleepyduck.xml.XMLParsable
-import com.sleepyduck.pushofwar.KeyModifier
-import scala.collection.mutable.ArrayBuffer
-import com.sleepyduck.pushofwar.Player
 
 abstract class BaseObjectDynamic(pow: PushOfWarTest, x: Float = 0, y: Float = 0, angle: Float = 0, copied: Boolean = false)
 	extends BaseObject(pow, x, y, angle) with XMLParsable with CollisionNormal with Cost0 {
@@ -86,10 +88,29 @@ abstract class BaseObjectDynamic(pow: PushOfWarTest, x: Float = 0, y: Float = 0,
 
 	def putAttributes(element: XMLElement) = {
 		element addAttribute ("id", id toString)
-		element addAttribute ("x", (body getPosition ()).x toString)
-		element addAttribute ("y", (body getPosition ()).y toString)
-		element addAttribute ("angle", body.getAngle().toString)
+		element addAttribute ("x", (body getPosition).x toString)
+		element addAttribute ("y", (body getPosition).y toString)
+		element addAttribute ("angle", body.getAngle.toString)
 		element addAttribute ("playerId", playerId toString)
+	}
+
+	def loadPos(element: XMLElement) = {
+		def find(attr: String) = (element getAttribute attr).value.toFloat
+		body.setTransform(new Vec2(find("x"), find("y")), find("angle"))
+		body.setLinearVelocity(new Vec2(find("xVel"), find("yVel")))
+		body.setAngularVelocity(find("angleVel"))
+	}
+
+	def getPosAsXMLElement = {
+		val element = new XMLElement("o")
+		element addAttribute ("id", id toString)
+		element addAttribute ("x", (body getPosition).x toString)
+		element addAttribute ("y", (body getPosition).y toString)
+		element addAttribute ("angle", body.getAngle.toString)
+		element addAttribute ("xVel", (body getLinearVelocity).x toString)
+		element addAttribute ("yVel", (body getLinearVelocity).y toString)
+		element addAttribute ("angleVel", body.getAngularVelocity.toString)
+		element
 	}
 
 	def initialize(element: XMLElement) = {
@@ -143,7 +164,7 @@ abstract class BaseObjectDynamic(pow: PushOfWarTest, x: Float = 0, y: Float = 0,
 
 	def addSpike(spike: BaseObjectDynamic) = spikes += spike
 
-	def removeObject(obj: BaseObjectDynamic):Unit = spikes -= obj
+	def removeObject(obj: BaseObjectDynamic): Unit = spikes -= obj
 
 	def getShape: Shape
 

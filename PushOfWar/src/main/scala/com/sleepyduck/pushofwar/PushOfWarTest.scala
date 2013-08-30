@@ -10,41 +10,39 @@ import org.jbox2d.common.Vec2
 import org.jbox2d.dynamics.joints.MouseJoint
 import org.jbox2d.dynamics.joints.MouseJointDef
 import org.jbox2d.testbed.framework.TestbedSettings
+import com.sleepyduck.pushofwar.communication.Done
+import com.sleepyduck.pushofwar.communication.Message
+import com.sleepyduck.pushofwar.communication.RecieveActor
+import com.sleepyduck.pushofwar.communication.Reset
+import com.sleepyduck.pushofwar.communication.Run
+import com.sleepyduck.pushofwar.communication.Synch
 import com.sleepyduck.pushofwar.model.Bar
 import com.sleepyduck.pushofwar.model.BarHard
 import com.sleepyduck.pushofwar.model.BaseObjectDynamic
-import com.sleepyduck.pushofwar.model.BaseObjectDynamic
-import com.sleepyduck.pushofwar.model.BaseObjectDynamic
-import com.sleepyduck.pushofwar.model.BaseObjectDynamic
-import com.sleepyduck.pushofwar.model.BaseObjectPlayer
-import com.sleepyduck.pushofwar.model.BaseObjectPlayer
 import com.sleepyduck.pushofwar.model.BaseObjectPlayer
 import com.sleepyduck.pushofwar.model.Cone
+import com.sleepyduck.pushofwar.model.RotationEnum
 import com.sleepyduck.pushofwar.model.RotationEnum.Clockwise
 import com.sleepyduck.pushofwar.model.RotationEnum.CounterClockwise
-import com.sleepyduck.pushofwar.model.RotationEnum.NoEngine
 import com.sleepyduck.pushofwar.model.Spike
 import com.sleepyduck.pushofwar.model.StaticBox
 import com.sleepyduck.pushofwar.model.SteamWheel
 import com.sleepyduck.pushofwar.model.Triangle
 import com.sleepyduck.pushofwar.model.Wheel
-import com.sleepyduck.xml.Attribute
-import com.sleepyduck.xml.XMLElement
-import com.sleepyduck.xml.XMLElement
+import com.sleepyduck.pushofwar.util.IStarted
+import com.sleepyduck.pushofwar.util.KeyModifier
+import com.sleepyduck.pushofwar.util.NooneStarted
+import com.sleepyduck.pushofwar.util.Player
+import com.sleepyduck.pushofwar.util.Player1
+import com.sleepyduck.pushofwar.util.Player2
+import com.sleepyduck.pushofwar.util.WhoStarted
 import com.sleepyduck.xml.XMLElement
 import com.sleepyduck.xml.XMLElementFactory
 import com.typesafe.config.ConfigFactory
-import akka.actor.Actor
-import akka.actor.ActorLogging
-import akka.actor.ActorRef
+import akka.actor.ActorSelection.toScala
 import akka.actor.ActorSystem
 import akka.actor.Props
-import akka.actor.Identify
-import akka.actor.ActorIdentity
-import scala.concurrent.duration.Duration
-import scala.concurrent.duration.DurationInt
-import akka.actor.ReceiveTimeout
-import com.sleepyduck.xml.XMLElement
+import com.sleepyduck.pushofwar.util.HelpText
 
 object PushOfWarTest {
 	val QuickSave = new XMLElement("PushOfWar")
@@ -59,7 +57,7 @@ object PushOfWarTest {
 	}
 
 	var doLoadFromFile = false
-	var running = false
+	var IsRunning = false
 
 	def saveToFile = {
 		val writer = new PrintWriter(new File("SaveFile.txt"))
@@ -83,27 +81,44 @@ object PushOfWarTest {
 	}
 
 	def loadPlayer1ToPlayer2From(element: XMLElement) = {
-		PushOfWarTest.QuickSave.getElement("Player2").getAttribute("points").value = element.getElement("Player1").getAttribute("points").value
-		val player2Objs = element.getElement("Objects").children filter (_.getAttribute("playerId").value.toInt == 1)
+		// Set the points
+		Player2.Points = element.getElement("Player1").getAttribute("points").value.toInt
+		PushOfWarTest.QuickSave.getElement("Player2").getAttribute("points").value = Player2.Points.toString
+
+		val player2Objs = element.getElement("Objects").children
 		player2Objs foreach (_.getAttribute("playerId").value = 2.toString)
 		player2Objs foreach (el => el.getAttribute("x").value = (-1.0F * el.getAttribute("x").value.toFloat).toString)
-		
+		player2Objs foreach (el => el.getAttribute("angle").value = (Math.PI.toFloat - el.getAttribute("angle").value.toFloat).toString)
+		val wheels = player2Objs filter (el => el.getAttribute("rotation") != null)
+		wheels foreach (el => el.getAttribute("rotation").value = RotationEnum.turnAround(RotationEnum.fromString(el.getAttribute("rotation").value)).toString())
+
 		val player1Objs = PushOfWarTest.QuickSave.getElement("Objects").children filter (_.getAttribute("playerId").value.toInt == 1)
-		
+
 		PushOfWarTest.QuickSave.getElement("Objects").children.clear
 		PushOfWarTest.QuickSave.getElement("Objects").children ++= player1Objs
-		PushOfWarTest.QuickSave.getElement("Objects").children ++= player2Objs 
+		PushOfWarTest.QuickSave.getElement("Objects").children ++= player2Objs
 	}
 }
 
-object KeyModifier {
-	var Shift = false
-	var Ctrl = false
-	var Alt = false
-}
-
-class PushOfWarTest extends WrappedTestbedTest {
+class PushOfWarTest(remoteAddress: String = "127.0.0.1", localAddress: String = "127.0.0.1", remotePort: String = "2552", localPort: String = "2552")
+	extends WrappedTestbedTest {
 	override def getTestName = "Push of War Test"
+
+	val systemServer = ActorSystem("PushOfWar", ConfigFactory.parseString(
+		s"""
+			akka {
+				actor {
+					provider = "akka.remote.RemoteActorRefProvider"
+				}
+				remote {
+					enabled-transports = ["akka.remote.netty.tcp"]
+					netty.tcp {
+						hostname = "$localAddress"
+						port = $localPort
+					}
+				}
+			}
+		"""))
 
 	val objects = new ArrayBuffer[BaseObjectDynamic]
 	var clickObject: Option[BaseObjectDynamic] = None
@@ -112,34 +127,17 @@ class PushOfWarTest extends WrappedTestbedTest {
 	var timer = 0L
 	val oneSecond = 1000L
 	val previousDistance = Array(0, 0)
-	var remoteAddress = "127.0.0.1"
+	val numPlayers = if (localAddress == remoteAddress && localPort == remotePort) 2 else 1
+	var whoStarted: WhoStarted = NooneStarted
+	val recieveActor = systemServer.actorOf(Props(new RecieveActor(this)), name = "server")
+	val path = s"akka.tcp://PushOfWar@$remoteAddress:$remotePort/user/server"
+	val sendActor = systemServer.actorSelection(path)
 
 	override def initTest(argDeserialized: Boolean) = {
 		setTitle("Push of War")
 
 		textList.clear()
-		addTextLine("Click and drag the left mouse button to move objects.")
-		addTextLine("Click and drag the right mouse button to move the screen.")
-		addTextLine("Zoom in and out using the scroll wheel.")
-		addTextLine("Wheels and spikes can be conected to other objects by releasing")
-		addTextLine("them when the center of the wheel is intersecting with another item.")
-		addTextLine("Ctrl-click to copy connected objects.")
-		addTextLine("Shift click to remove a object.")
-		addTextLine("Press 'S' to quickly spawn a spike where the mouse is.")
-		addTextLine("Press Enter to start the fight.")
-		addTextLine("Press 'R' to reset the building process to the same state as before the fight started.")
-		addTextLine("Press 'C' to clear the game.")
-		addTextLine("Press F5 save the game to disk.")
-		addTextLine("Press F6 load the game from disk.")
-		addTextLine("Press 'H' to toggle the help.")
-		addTextLine("")
-
-		addTextLine("Player 1 is on the left.")
-		addTextLine("Player 2 is on the right.")
-		addTextLine("Large wheels cost " + SteamWheel.Cost + " points.")
-		addTextLine("Wheels cost " + Wheel.Cost + " points.")
-		addTextLine("Bars and triangles cost " + Bar.Cost + " points.")
-		addTextLine("Spikes cost " + Spike.Cost + " points.")
+		HelpText.Init(this)
 
 		getWorld().setGravity(new Vec2(0, -45))
 
@@ -147,11 +145,11 @@ class PushOfWarTest extends WrappedTestbedTest {
 		clickObject = None
 		val width = 150
 
-		if (PushOfWarTest.running) {
+		if (PushOfWarTest.IsRunning) {
 			PushOfWarTest.QuickSave.getElement("Player1").getAttribute("points").value = Player1.Points.toString
 			PushOfWarTest.QuickSave.getElement("Player2").getAttribute("points").value = Player2.Points.toString
 		}
-		PushOfWarTest.running = false
+		PushOfWarTest.IsRunning = false
 
 		// Stage
 		new StaticBox(pow = this, w = width * 2)
@@ -159,7 +157,7 @@ class PushOfWarTest extends WrappedTestbedTest {
 		_load
 		val playerObjCount = objects filter (_.isPlayerBox) length
 
-		for (i <- 0 to 1) {
+		for (i <- 0 to numPlayers - 1) {
 			val sign = -1 + 2 * i
 			val start = objects.length
 
@@ -193,43 +191,55 @@ class PushOfWarTest extends WrappedTestbedTest {
 		objects foreach (_ step settings)
 
 		// Draw Game Info
-
 		var textLine = 40
 		getModel() getDebugDraw () drawString (frame.getBounds().getWidth().toFloat / 2.0F - 40, textLine, "Points", new Color3f(.6f, .61f, 1))
 		textLine += 15
-		getModel() getDebugDraw () drawString (frame.getBounds().getWidth().toFloat / 2.0F - 200, textLine, ("Player 1 has " + Player1.Points + " points"), Color3f.WHITE)
-		getModel() getDebugDraw () drawString (frame.getBounds().getWidth().toFloat / 2.0F + 20, textLine, ("Player 2 has " + Player2.Points + " points"), Color3f.WHITE)
+		getModel() getDebugDraw () drawString (frame.getBounds().getWidth().toFloat / 2.0F - 200, textLine, (s"Player 1 has ${Player1.Points} points ${if (Player1.IsDone) "(Done)" else ""}"), Color3f.WHITE)
+		getModel() getDebugDraw () drawString (frame.getBounds().getWidth().toFloat / 2.0F + 20, textLine, (s"Player 2 has ${Player2.Points} points ${if (Player2.IsDone) "(Done)" else ""}"), Color3f.WHITE)
 
 		// Check to give point
-		if (PushOfWarTest.running && timer < System.currentTimeMillis() && timer != 0) {
+		if (PushOfWarTest.IsRunning && timer < System.currentTimeMillis() && timer != 0) {
 			timer = System.currentTimeMillis() + oneSecond
 			givePoints
 		}
+
+		//If multiplayer synch simulation
+		if (PushOfWarTest.IsRunning && whoStarted == IStarted) {
+			this sendMessage new Synch(this getObjectsData)
+		}
+	}
+
+	def getObjectsData = {
+		val element = new XMLElement("Objects")
+		objects foreach (obj => element addChild (obj getPosAsXMLElement))
+		element
 	}
 
 	override def mouseDown(p: Vec2) = {
 		//super.mouseDown(p) Do not call super!
 		//System.out.println("Mouse down at: (" + p.x.toInt + ", " + p.y.toInt + ")")
-		if (KeyModifier.Shift) mouseDownShift(p)
-		else {
-			var wasCopied = false
-			clickObject = takeOne(findObjects(p))
-			clickObject = clickObject map (_ getCopyOrThis) filter (_ != null)
-			clickObject foreach (o => wasCopied = o.hasBeenCopied)
-			clickObject foreach (_ mouseDown p)
-			clickObject foreach (objects -= _)
-			clickObject foreach (objects prepend _)
+		if (!Player1.IsDone) {
+			if (KeyModifier.Shift) mouseDownShift(p)
+			else {
+				var wasCopied = false
+				clickObject = takeOne(findObjects(p))
+				clickObject = clickObject map (_ getCopyOrThis) filter (_ != null)
+				clickObject foreach (o => wasCopied = o.hasBeenCopied)
+				clickObject foreach (_ mouseDown p)
+				clickObject foreach (objects -= _)
+				clickObject foreach (objects prepend _)
 
-			if (clickObject isDefined) {
-				val body = clickObject.get body
-				val mouseDef = new MouseJointDef() {
-					bodyA = groundBody
-					bodyB = body
-					target set p
-					maxForce = 1000f * (body getMass)
+				if (clickObject isDefined) {
+					val body = clickObject.get body
+					val mouseDef = new MouseJointDef() {
+						bodyA = groundBody
+						bodyB = body
+						target set p
+						maxForce = 1000f * (body getMass)
+					}
+					mouseJoint = Option apply (getWorld() createJoint (mouseDef)).asInstanceOf[MouseJoint]
+					body setAwake true
 				}
-				mouseJoint = Option apply (getWorld() createJoint (mouseDef)).asInstanceOf[MouseJoint]
-				body setAwake true
 			}
 		}
 	}
@@ -242,13 +252,15 @@ class PushOfWarTest extends WrappedTestbedTest {
 
 	override def mouseUp(p: Vec2) = {
 		super.mouseUp(p)
-		clickObject foreach (_ mouseUp)
-		clickObject foreach (_ click)
-		clickObject = None
-		objects foreach (_ stop)
+		if (!Player1.IsDone) {
+			clickObject foreach (_ mouseUp)
+			clickObject foreach (_ click)
+			clickObject = None
+			objects foreach (_ stop)
 
-		mouseJoint foreach (getWorld() destroyJoint _)
-		mouseJoint = None
+			mouseJoint foreach (getWorld() destroyJoint _)
+			mouseJoint = None
+		}
 	}
 
 	override def mouseMove(p: Vec2) = {
@@ -260,28 +272,37 @@ class PushOfWarTest extends WrappedTestbedTest {
 		System.out.println("Key pressed: " + keyChar + " (" + keyCode + ")")
 		keyCode match {
 			case 67 => // c
-				PushOfWarTest.running = false
+				PushOfWarTest.IsRunning = false
 				PushOfWarTest.Reset
 				reset
 			case 68 => // d
-				if (!PushOfWarTest.running) {
+				if (!PushOfWarTest.IsRunning && numPlayers == 1) {
+					Player1.IsDone = true
 					quicksave
-					senderActor ! PushOfWarTest.QuickSave.toString
+					this sendMessage new Done(this filterPlayer1 PushOfWarTest.QuickSave)
+					if (Player2.IsDone) {
+						PushOfWarTest.doLoadFromFile = false
+						_load
+					}
 				}
 			case 72 => // h
 				setShowInfo(!getShowInfo())
 			case 83 => // s
-				spawnSpike(this getWorldMouse)
+				if (!Player1.IsDone)
+					spawnSpike(this getWorldMouse)
 			case 10 => // enter
-				if (!PushOfWarTest.running) {
+				if (!PushOfWarTest.IsRunning && (numPlayers == 2 || (Player1.IsDone && Player2.IsDone))) {
 					quicksave
 					start
+					whoStarted = IStarted
+					this sendMessage Run
+					PushOfWarTest.IsRunning = true
 				}
-				PushOfWarTest.running = true
 			case 116 => // F5
-				saveToFile
+				if (!PushOfWarTest.IsRunning)
+					saveToFile
 			case 117 => // F6
-				PushOfWarTest.running = false
+				PushOfWarTest.IsRunning = false
 				PushOfWarTest.doLoadFromFile = true
 				reset
 			case 16 => // Shift
@@ -305,15 +326,22 @@ class PushOfWarTest extends WrappedTestbedTest {
 	}
 
 	def quicksave = {
-		PushOfWarTest.QuickSave.children.clear
-		PushOfWarTest.QuickSave.addAllChildren(List(new XMLElement("Objects"), new XMLElement("Player1"), new XMLElement("Player2")))
-		objects filter (_.hasBeenCopied) foreach (obj => PushOfWarTest.QuickSave.getElement("Objects") addChild (obj toXMLElement))
-
+		numPlayers match {
+			case 1 =>
+				val player2Objs = PushOfWarTest.QuickSave.getElement("Objects").children filter (_.getAttribute("playerId").value.toInt == 2)
+				PushOfWarTest.QuickSave.children.clear
+				PushOfWarTest.QuickSave.addAllChildren(List(new XMLElement("Objects"), new XMLElement("Player1"), new XMLElement("Player2")))
+				objects filter (obj => obj.hasBeenCopied && obj.playerId == 1) foreach (obj => PushOfWarTest.QuickSave.getElement("Objects") addChild (obj toXMLElement))
+				PushOfWarTest.QuickSave.getElement("Objects").children ++= player2Objs
+			case 2 =>
+				PushOfWarTest.QuickSave.children.clear
+				PushOfWarTest.QuickSave.addAllChildren(List(new XMLElement("Objects"), new XMLElement("Player1"), new XMLElement("Player2")))
+				objects filter (_.hasBeenCopied) foreach (obj => PushOfWarTest.QuickSave.getElement("Objects") addChild (obj toXMLElement))
+		}
 		PushOfWarTest.QuickSave.getElement("Player1").addAttribute("points", Player1.Points.toString)
 		PushOfWarTest.QuickSave.getElement("Player2").addAttribute("points", Player2.Points.toString)
 
 		println("Save")
-		println(PushOfWarTest.QuickSave.toString)
 	}
 
 	def saveToFile = {
@@ -321,9 +349,20 @@ class PushOfWarTest extends WrappedTestbedTest {
 		PushOfWarTest saveToFile
 	}
 
+	override def reset = {
+		super.reset
+		Player1.IsDone = false
+		mouseJoint = None
+		whoStarted = NooneStarted
+		this sendMessage Reset
+	}
+
 	override def _load = {
 		if (PushOfWarTest.doLoadFromFile == true)
 			PushOfWarTest loadFromFile
+			
+		objects clone() foreach (this removeObject _)
+		objects clear
 
 		PushOfWarTest.QuickSave.getElement("Objects").children foreach createObject
 		objects filter (_ hasBeenCopied) map (_ initializeJoints)
@@ -428,45 +467,32 @@ class PushOfWarTest extends WrappedTestbedTest {
 		}
 	}
 
-	def recieverCallback(msg: String) = {}
-
-	//#setup
-	val systemRecieve = ActorSystem("PushOfWar", ConfigFactory.load.getConfig("reciever"))
-	val recieveActor = systemRecieve.actorOf(Props(classOf[Reciever], this), "reciever")
-
-	val systemRemote = ActorSystem("PushOfWar", ConfigFactory.load.getConfig("remotelookup"))
-	val remotePath = s"akka.tcp://PushOfWar@$remoteAddress:2552/user/reciever"
-	val senderActor = systemRemote.actorOf(Props(classOf[Sender], remotePath), "sender")
-
-}
-
-class Reciever(callback: PushOfWarTest) extends Actor {
-	def receive = {
-		case msg: String =>
-			callback.quicksave
-			PushOfWarTest loadPlayer1ToPlayer2From XMLElementFactory.BuildFromXMLString(msg).head
-			callback.reset
-	}
-}
-
-class Sender(path: String) extends Actor {
-
-	context.setReceiveTimeout(3.seconds)
-	sendIdentifyRequest()
-
-	def sendIdentifyRequest(): Unit =
-		context.actorSelection(path) ! Identify(path)
-
-	def receive = {
-		case ActorIdentity(`path`, Some(actor)) =>
-			context.setReceiveTimeout(Duration.Undefined)
-			context.become(active(actor))
-		case ActorIdentity(`path`, None) => println(s"Remote actor not availible: $path")
-		case ReceiveTimeout => sendIdentifyRequest()
-		case _ => println("Not ready yet")
+	override def exit = {
+		super.exit
+		systemServer.shutdown
 	}
 
-	def active(actor: ActorRef): Actor.Receive = {
-		case str: String => actor ! str
+	def filterPlayer1(element: XMLElement) = {
+		// Copy
+		val newEl = XMLElementFactory BuildFromXMLString (element.toString) head
+
+		val playerObjs = newEl.getElement("Objects").children filter (_.getAttribute("playerId").value.toInt == 1)
+		newEl.getElement("Objects").children.clear
+		newEl.getElement("Objects").children ++= playerObjs
+		newEl.children -= newEl getElement "Player2"
+
+		newEl
 	}
+
+	def synchFrom(element: XMLElement) = {
+		val player2Objs = element.children filter (_.getAttribute("playerId").value.toInt == 1)
+		player2Objs foreach (el => el.getAttribute("x").value = (-1.0F * el.getAttribute("x").value.toFloat).toString)
+		player2Objs foreach (el => el.getAttribute("angle").value = (-1.0F * el.getAttribute("angle").value.toFloat).toString)
+		player2Objs foreach (el => el.getAttribute("xVel").value = (-1.0F * el.getAttribute("xVel").value.toFloat).toString)
+		player2Objs foreach (el => el.getAttribute("angleVel").value = (-1.0F * el.getAttribute("angleVel").value.toFloat).toString)
+
+		element.children foreach (el => (this getObject (el.getAttribute("id").value.toInt)) foreach (obj => obj loadPos el))
+	}
+
+	def sendMessage(msg: Message) = if (numPlayers == 1) sendActor ! msg
 }

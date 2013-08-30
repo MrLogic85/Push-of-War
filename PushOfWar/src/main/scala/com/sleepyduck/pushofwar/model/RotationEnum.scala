@@ -8,4 +8,9 @@ object RotationEnum extends Enumeration {
 		case "CounterClockwise" => CounterClockwise
 		case "NoEngine" => NoEngine
 	}
+	def turnAround(rot:Rotation) = rot match {
+		case Clockwise => CounterClockwise
+		case CounterClockwise => Clockwise
+		case NoEngine => NoEngine
+	}
 }

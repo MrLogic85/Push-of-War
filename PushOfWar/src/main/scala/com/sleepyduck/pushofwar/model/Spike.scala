@@ -1,7 +1,7 @@
 package com.sleepyduck.pushofwar.model
 
 import com.sleepyduck.pushofwar.PushOfWarTest
-import com.sleepyduck.pushofwar.KeyModifier
+import com.sleepyduck.pushofwar.util.KeyModifier
 import org.jbox2d.dynamics.BodyDef
 import org.jbox2d.dynamics.FixtureDef
 import org.jbox2d.collision.shapes.CircleShape

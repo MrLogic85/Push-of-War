@@ -1,7 +1,8 @@
-package com.sleepyduck.pushofwar
+package com.sleepyduck.pushofwar.util
 
 class Player {
 	var Points = 0
+	var IsDone = false
 
 	def TryPay(cost: Int) = {
 		if (Points >= cost) {
