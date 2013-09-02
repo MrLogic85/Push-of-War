@@ -1,18 +1,18 @@
 package com.sleepyduck.pushofwar.model
 
-import scala.collection.mutable.ArrayBuffer
 import org.jbox2d.collision.shapes.ChainShape
 import org.jbox2d.collision.shapes.CircleShape
 import org.jbox2d.common.Vec2
-import org.jbox2d.dynamics.Body
 import org.jbox2d.dynamics.Filter
 import org.jbox2d.dynamics.FixtureDef
-import org.jbox2d.dynamics.joints.Joint
-import org.jbox2d.dynamics.joints.RevoluteJoint
+
 import com.sleepyduck.pushofwar.PushOfWarTest
+import com.sleepyduck.pushofwar.model.RotationEnum.Clockwise
+import com.sleepyduck.pushofwar.model.RotationEnum.CounterClockwise
+import com.sleepyduck.pushofwar.model.RotationEnum.NoEngine
+import com.sleepyduck.pushofwar.model.RotationEnum.Rotation
+import com.sleepyduck.pushofwar.util.ColorChooserAlt
 import com.sleepyduck.xml.XMLElement
-import com.sleepyduck.pushofwar.WrappedWorld
-import com.sleepyduck.pushofwar.model.RotationEnum._
 
 object Wheel extends AnyRef with Cost20
 
@@ -21,6 +21,7 @@ class Wheel(pow: PushOfWarTest, x: Float = 0, y: Float = 0, angle: Float = 0, ra
 	extends Spike(pow, x, y, angle, copied) with CollisionHard with Cost20 {
 
 	body getFixtureList () setUserData ColorChooserAlt
+	body getFixtureList () setFriction 6
 
 	def motorJoints = joints filter (_.getBodyA() == Wheel.this.body)
 

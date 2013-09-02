@@ -1,4 +1,4 @@
-package com.sleepyduck.pushofwar.model
+package com.sleepyduck.pushofwar.util
 
 import org.jbox2d.common.Color3f
 import org.jbox2d.dynamics.Body
@@ -11,6 +11,11 @@ object ColorChooser extends ColorChooser {
 object ColorChooserAlt extends ColorChooser {
 	override def sleepyColor = new Color3f(0.15F,0.15F,0.35F)
 	override def awakeColor = new Color3f(0.3F,0.3F,0.7F)
+}
+
+object ColorChooserInvisible extends ColorChooser {
+	override def sleepyColor = new Color3f(0,0,0)
+	override def awakeColor = new Color3f(0,0,0)
 }
 
 class ColorChooser() {

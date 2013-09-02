@@ -1,0 +1,73 @@
+<PushOfWar>
+	<Objects>
+		<SpikeHard id="1113487615" x="141.90611" y="-16.288523" angle="-3.7470334" playerId="2">
+			<Joints>
+				<Joint id="21553112"/>
+			</Joints>
+		</SpikeHard>
+		<BaseObjectPlayer id="762015515" x="138.25543" y="-14.043025" angle="0.3805422" playerId="2"/>
+		<SpikeHard id="1339507048" x="135.46384" y="-16.147955" angle="-0.5200011" playerId="2">
+			<Joints>
+				<Joint id="787195190"/>
+			</Joints>
+		</SpikeHard>
+		<Cone id="787195190" x="135.3851" y="-16.573381" angle="-3.0398345" playerId="2"/>
+		<Cone id="21553112" x="142.99672" y="-17.855116" angle="-0.83715934" playerId="2"/>
+		<Spike id="1834673051" x="138.19427" y="-17.215662" angle="1.2823228E-11" playerId="2">
+			<Joints>
+				<Joint id="787195190"/>
+				<Joint id="762015515"/>
+				<Joint id="348229763"/>
+			</Joints>
+		</Spike>
+		<Spike id="1541842088" x="140.43918" y="-16.21723" angle="-4.8462937E-7" playerId="2">
+			<Joints>
+				<Joint id="21553112"/>
+				<Joint id="762015515"/>
+				<Joint id="348229763"/>
+			</Joints>
+		</Spike>
+		<Wheel id="2047294995" x="140.2146" y="-18.805918" angle="-2.7896402" playerId="2" rotation="Clockwise">
+			<Joints>
+				<Joint id="348229763"/>
+			</Joints>
+		</Wheel>
+		<Wheel id="1155065839" x="144.62408" y="-19.610868" angle="1.587802" playerId="2" rotation="Clockwise">
+			<Joints>
+				<Joint id="21553112"/>
+			</Joints>
+		</Wheel>
+		<Wheel id="283502758" x="132.89351" y="-16.773771" angle="0.5202109" playerId="2" rotation="Clockwise">
+			<Joints>
+				<Joint id="787195190"/>
+			</Joints>
+		</Wheel>
+		<Triangle id="348229763" x="139.56934" y="-17.444939" angle="-6.932672" playerId="2"/>
+		<Bar id="525886367" x="-139.68416" y="-18.504868" angle="0.29694927" playerId="1" w="10.0" h="1.0"/>
+		<Wheel id="1103923636" x="-135.28302" y="-17.377205" angle="0.55062276" playerId="1" rotation="CounterClockwise">
+			<Joints>
+				<Joint id="525886367"/>
+			</Joints>
+		</Wheel>
+		<Wheel id="203482422" x="-143.9965" y="-19.76192" angle="0.24764273" playerId="1" rotation="CounterClockwise">
+			<Joints>
+				<Joint id="525886367"/>
+			</Joints>
+		</Wheel>
+		<BaseObjectPlayer id="137336490" x="-140.2358" y="-15.1782255" angle="1.3540245" playerId="1"/>
+		<Spike id="1136011715" x="-138.14453" y="-17.98492" angle="0.0" playerId="1">
+			<Joints>
+				<Joint id="525886367"/>
+				<Joint id="137336490"/>
+			</Joints>
+		</Spike>
+		<Spike id="53582442" x="-139.34235" y="-18.262547" angle="0.0" playerId="1">
+			<Joints>
+				<Joint id="525886367"/>
+				<Joint id="137336490"/>
+			</Joints>
+		</Spike>
+	</Objects>
+	<Player1 points="46"/>
+	<Player2 points="2"/>
+</PushOfWar>

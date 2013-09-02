@@ -23,7 +23,7 @@ import org.jbox2d.pooling.IWorldPool;
 import org.jbox2d.pooling.arrays.Vec2Array;
 import org.jbox2d.pooling.normal.DefaultWorldPool;
 
-import com.sleepyduck.pushofwar.model.ColorChooser;
+import com.sleepyduck.pushofwar.util.ColorChooser;
 
 public abstract class WrappedWorld extends World {
 	public static Integer LIQUID_INT = new Integer(1234598372);

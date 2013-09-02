@@ -6,10 +6,13 @@ import org.jbox2d.dynamics.Filter
 import org.jbox2d.collision.shapes.PolygonShape
 import org.jbox2d.dynamics.FixtureDef
 import org.jbox2d.collision.shapes.ChainShape
+import com.sleepyduck.pushofwar.util.ColorChooserAlt
 
 class BaseObjectPlayer(pow: PushOfWarTest, x: Float = 0, y: Float = 0, angle: Float = 0)
 	extends BaseObjectDynamic(pow, x, y, angle, true) with CollisionHard {
 
+	body getFixtureList () setUserData ColorChooserAlt
+	
 	def copy = null
 	override def clusterCopy = null
 
