@@ -10,7 +10,9 @@ import org.jbox2d.common.Vec2
 import org.jbox2d.dynamics.joints.MouseJoint
 import org.jbox2d.dynamics.joints.MouseJointDef
 import org.jbox2d.testbed.framework.TestbedSettings
+import com.sleepyduck.pushofwar.communication.Connected
 import com.sleepyduck.pushofwar.communication.Done
+import com.sleepyduck.pushofwar.communication.Mailbox
 import com.sleepyduck.pushofwar.communication.Message
 import com.sleepyduck.pushofwar.communication.RecieveActor
 import com.sleepyduck.pushofwar.communication.Reset
@@ -25,13 +27,16 @@ import com.sleepyduck.pushofwar.model.RotationEnum
 import com.sleepyduck.pushofwar.model.RotationEnum.Clockwise
 import com.sleepyduck.pushofwar.model.RotationEnum.CounterClockwise
 import com.sleepyduck.pushofwar.model.Spike
+import com.sleepyduck.pushofwar.model.SpikeHard
 import com.sleepyduck.pushofwar.model.StaticBox
 import com.sleepyduck.pushofwar.model.SteamWheel
 import com.sleepyduck.pushofwar.model.Triangle
 import com.sleepyduck.pushofwar.model.Wheel
+import com.sleepyduck.pushofwar.util.HelpText
 import com.sleepyduck.pushofwar.util.IStarted
 import com.sleepyduck.pushofwar.util.KeyModifier
 import com.sleepyduck.pushofwar.util.NooneStarted
+import com.sleepyduck.pushofwar.util.OtherStarted
 import com.sleepyduck.pushofwar.util.Player
 import com.sleepyduck.pushofwar.util.Player1
 import com.sleepyduck.pushofwar.util.Player2
@@ -42,7 +47,12 @@ import com.typesafe.config.ConfigFactory
 import akka.actor.ActorSelection.toScala
 import akka.actor.ActorSystem
 import akka.actor.Props
-import com.sleepyduck.pushofwar.util.HelpText
+import com.sleepyduck.pushofwar.communication.KeyPressed
+import com.sleepyduck.pushofwar.communication.KeyPressed
+import com.sleepyduck.pushofwar.communication.MouseUp
+import com.sleepyduck.pushofwar.communication.MouseDown
+import com.sleepyduck.pushofwar.communication.Reset
+import com.sleepyduck.pushofwar.model.BaseObjectDynamic
 
 object PushOfWarTest {
 	val QuickSave = new XMLElement("PushOfWar")
@@ -56,21 +66,20 @@ object PushOfWarTest {
 		PushOfWarTest.QuickSave.getElement("Player2").addAttribute("points", "100")
 	}
 
-	var doLoadFromFile = false
+	var doLoadFromFile = true
 	var IsRunning = false
 
-	def saveToFile = {
-		val writer = new PrintWriter(new File("SaveFile.txt"))
+	def saveToFile(name: String) = {
+		val writer = new PrintWriter(new File(s"$name.xml"))
 		writer.write(QuickSave toString)
 		writer.close()
 		println("Save to file")
 	}
 
-	def loadFromFile = {
+	def loadFromFile(name: String) = {
 		try {
-			def saveText = Source.fromFile("SaveFile.txt") getLines () reduce (_ + _)
-			println(saveText)
-			def headElement = (XMLElementFactory BuildFromXMLString saveText).headOption getOrElse (new XMLElement)
+			val saveText = Source.fromFile(s"$name.xml") getLines () reduce (_ + _)
+			val headElement = (XMLElementFactory BuildFromXMLString saveText).headOption getOrElse (new XMLElement)
 			QuickSave.children clear ()
 			QuickSave.children ++= headElement.children
 			doLoadFromFile = false
@@ -100,7 +109,7 @@ object PushOfWarTest {
 	}
 }
 
-class PushOfWarTest(remoteAddress: String = "127.0.0.1", localAddress: String = "127.0.0.1", remotePort: String = "2552", localPort: String = "2552")
+class PushOfWarTest(remoteAddress: String = "127.0.0.1", localAddress: String = "127.0.0.1", remotePort: String = "2552", localPort: String = "2552", saveFile: String = "SaveFile")
 	extends WrappedTestbedTest {
 	override def getTestName = "Push of War Test"
 
@@ -119,29 +128,34 @@ class PushOfWarTest(remoteAddress: String = "127.0.0.1", localAddress: String = 
 				}
 			}
 		"""))
+	val recieveActor = systemServer.actorOf(Props(new RecieveActor(this)), name = "server")
+	val path = s"akka.tcp://PushOfWar@$remoteAddress:$remotePort/user/server"
+	val sendActor = systemServer.actorSelection(path)
 
 	val objects = new ArrayBuffer[BaseObjectDynamic]
 	var clickObject: Option[BaseObjectDynamic] = None
 	var mouseJoint: Option[MouseJoint] = None
 	var frame: WrappedTestbedFrame = null
-	var timer = 0L
-	val oneSecond = 1000L
+	var checkForPoints = false
 	val previousDistance = Array(0, 0)
 	val numPlayers = if (localAddress == remoteAddress && localPort == remotePort) 2 else 1
 	var whoStarted: WhoStarted = NooneStarted
-	val recieveActor = systemServer.actorOf(Props(new RecieveActor(this)), name = "server")
-	val path = s"akka.tcp://PushOfWar@$remoteAddress:$remotePort/user/server"
-	val sendActor = systemServer.actorSelection(path)
+	val raceInfoText = Array("", "", "", "", "")
+	var raceInfoTextCounter = 0
 
 	override def initTest(argDeserialized: Boolean) = {
 		setTitle("Push of War")
+		Mailbox.New
 
 		textList.clear()
 		HelpText.Init(this)
+		for (i <- 0 until raceInfoText.length) raceInfoText(i) = ""
+		raceInfoTextCounter = 0
 
 		getWorld().setGravity(new Vec2(0, -45))
 
 		objects clear ()
+		this sendMessage Reset()
 		clickObject = None
 		val width = 150
 
@@ -155,14 +169,16 @@ class PushOfWarTest(remoteAddress: String = "127.0.0.1", localAddress: String = 
 		new StaticBox(pow = this, w = width * 2)
 
 		_load
-		val playerObjCount = objects filter (_.isPlayerBox) length
+		val playerObjCount = Array[Int](0, 0)
+		playerObjCount.update(0, (objects filter (_.isPlayerBox) filter (_.playerId == 1) length))
+		playerObjCount.update(1, (objects filter (_.isPlayerBox) filter (_.playerId == 2) length))
 
 		for (i <- 0 to numPlayers - 1) {
 			val sign = -1 + 2 * i
 			val start = objects.length
 
 			//Body
-			if (playerObjCount == 0) {
+			if (playerObjCount(i) == 0) {
 				val playerObj = new BaseObjectPlayer(pow = this, x = sign * (width - 10), y = 2)
 				this addObject playerObj
 			}
@@ -180,10 +196,17 @@ class PushOfWarTest(remoteAddress: String = "127.0.0.1", localAddress: String = 
 			this addObject new Cone(pow = this, x = sign * (width + 7), y = 5)
 
 			// Spikes
-			this addObject new Spike(pow = this, x = sign * (width + 5), y = 0)
+			this addObject new Spike(pow = this, x = sign * (width + 6), y = 0)
+			this addObject new SpikeHard(pow = this, x = sign * (width + 4), y = 0)
 
 			for (j <- start until objects.length) objects(j) setPlayerId (i + 1)
 		}
+	}
+
+	def addRaceInfoText(text: String) = {
+		for (i <- 1 until raceInfoText.length) raceInfoText(i - 1) = raceInfoText(i)
+		raceInfoTextCounter += 1
+		raceInfoText(raceInfoText.length - 1) = s"$raceInfoTextCounter: $text"
 	}
 
 	override def step(settings: TestbedSettings) = {
@@ -196,17 +219,136 @@ class PushOfWarTest(remoteAddress: String = "127.0.0.1", localAddress: String = 
 		textLine += 15
 		getModel() getDebugDraw () drawString (frame.getBounds().getWidth().toFloat / 2.0F - 200, textLine, (s"Player 1 has ${Player1.Points} points ${if (Player1.IsDone) "(Done)" else ""}"), Color3f.WHITE)
 		getModel() getDebugDraw () drawString (frame.getBounds().getWidth().toFloat / 2.0F + 20, textLine, (s"Player 2 has ${Player2.Points} points ${if (Player2.IsDone) "(Done)" else ""}"), Color3f.WHITE)
+		textLine += 15
+		raceInfoText foreach (text =>
+			(textLine += 15, getModel() getDebugDraw () drawString (frame.getBounds().getWidth().toFloat / 2.0F - 90, textLine, text, Color3f.WHITE)))
 
 		// Check to give point
-		if (PushOfWarTest.IsRunning && timer < System.currentTimeMillis() && timer != 0) {
-			timer = System.currentTimeMillis() + oneSecond
-			givePoints
-		}
+		if (PushOfWarTest.IsRunning && checkForPoints) givePoints
 
 		//If multiplayer synch simulation
-		if (PushOfWarTest.IsRunning && whoStarted == IStarted) {
-			this sendMessage new Synch(this getObjectsData)
+		if (PushOfWarTest.IsRunning && whoStarted == IStarted) this sendMessage new Synch(this getObjectsData)
+
+		// Check mailbox
+		Mailbox.Get foreach handleMail
+	}
+
+	def handleMail(message: Message) = message match {
+		case d: Done =>
+			println(s"New mail: $message")
+			if (!PushOfWarTest.IsRunning) {
+				saveToFile
+				PushOfWarTest loadPlayer1ToPlayer2From d.data
+				Player2.IsDone = true
+				if (Player1.IsDone) {
+					PushOfWarTest.doLoadFromFile = false
+					_load
+				}
+			}
+		case r: Reset =>
+			println(s"New mail: $message")
+			Player2.IsDone = false
+			if (PushOfWarTest.IsRunning)
+				reset
+		case r: Run =>
+			println(s"New mail: $message")
+			if (!PushOfWarTest.IsRunning) {
+				whoStarted = OtherStarted
+				saveToFile
+				start
+			}
+			PushOfWarTest.IsRunning = true
+		case m: Synch =>
+			if (PushOfWarTest.IsRunning)
+				this synchFrom m.data
+		case KeyPressed(i) => i match {
+			case 67 => // c
+				println(s"New mail: $message")
+				PushOfWarTest.IsRunning = false
+				var objs = objects clone () filter (_.hasBeenCopied)
+				if (numPlayers == 1) objs = objs filter (_.playerId == 1)
+				objs foreach (o => (
+					Player Get (o.playerId) GiverPoints o.Cost,
+					this removeObject o))
+				saveToFile
+				reset
+			case 68 => // d
+				println(s"New mail: $message")
+				if (!PushOfWarTest.IsRunning && numPlayers == 1 && !Player1.IsDone) {
+					Player1.IsDone = true
+					saveToFile
+					this sendMessage new Done(this filterPlayer1 PushOfWarTest.QuickSave)
+					if (Player2.IsDone) {
+						PushOfWarTest.doLoadFromFile = false
+						_load
+					}
+				}
+			case 72 => // h
+				println(s"New mail: $message")
+				setShowInfo(!getShowInfo())
+			case 83 => // s
+				println(s"New mail: $message")
+				if (!Player1.IsDone)
+					spawnSpike(this getWorldMouse)
+			case 10 => // enter
+				println(s"New mail: $message")
+				if (!PushOfWarTest.IsRunning && (numPlayers == 2 || (Player1.IsDone && Player2.IsDone))) {
+					saveToFile
+					start
+					whoStarted = IStarted
+					this sendMessage Run()
+					PushOfWarTest.IsRunning = true
+				}
+			case 116 => // F5
+				println(s"New mail: $message")
+				if (!PushOfWarTest.IsRunning)
+					saveToFile
+			case 117 => // F6
+				println(s"New mail: $message")
+				if (!PushOfWarTest.IsRunning && (numPlayers == 2 || (!Player1.IsDone && !Player2.IsDone))) {
+					PushOfWarTest.IsRunning = false
+					PushOfWarTest.doLoadFromFile = true
+					reset
+				}
+			case _ =>
 		}
+		case MouseUp(p) =>
+			if (!Player1.IsDone) {
+				clickObject foreach (_ mouseUp)
+				clickObject foreach (_ click)
+				clickObject = None
+				objects foreach (_ stop)
+
+				mouseJoint foreach (getWorld() destroyJoint _)
+				mouseJoint = None
+			}
+		case MouseDown(p) =>
+			if (!Player1.IsDone) {
+				if (KeyModifier.Shift) mouseDownShift(p)
+				else {
+					var wasCopied = false
+					clickObject = takeOne(findObjects(p))
+					clickObject = clickObject map (_ getCopyOrThis) filter (_ != null)
+					clickObject foreach (o => wasCopied = o.hasBeenCopied)
+					clickObject foreach (_ mouseDown p)
+					clickObject foreach (objects -= _)
+					clickObject foreach (objects prepend _)
+
+					if (clickObject isDefined) {
+						val body = clickObject.get body
+						val mouseDef = new MouseJointDef() {
+							bodyA = groundBody
+							bodyB = body
+							target set p
+							maxForce = 1000f * (body getMass)
+						}
+						mouseJoint = Option apply (getWorld() createJoint (mouseDef)).asInstanceOf[MouseJoint]
+						body setAwake true
+					}
+				}
+			}
+		case m: Message => println("Unhandled message " + m)
+		case _ => println("Unhandled message")
 	}
 
 	def getObjectsData = {
@@ -217,31 +359,7 @@ class PushOfWarTest(remoteAddress: String = "127.0.0.1", localAddress: String = 
 
 	override def mouseDown(p: Vec2) = {
 		//super.mouseDown(p) Do not call super!
-		//System.out.println("Mouse down at: (" + p.x.toInt + ", " + p.y.toInt + ")")
-		if (!Player1.IsDone) {
-			if (KeyModifier.Shift) mouseDownShift(p)
-			else {
-				var wasCopied = false
-				clickObject = takeOne(findObjects(p))
-				clickObject = clickObject map (_ getCopyOrThis) filter (_ != null)
-				clickObject foreach (o => wasCopied = o.hasBeenCopied)
-				clickObject foreach (_ mouseDown p)
-				clickObject foreach (objects -= _)
-				clickObject foreach (objects prepend _)
-
-				if (clickObject isDefined) {
-					val body = clickObject.get body
-					val mouseDef = new MouseJointDef() {
-						bodyA = groundBody
-						bodyB = body
-						target set p
-						maxForce = 1000f * (body getMass)
-					}
-					mouseJoint = Option apply (getWorld() createJoint (mouseDef)).asInstanceOf[MouseJoint]
-					body setAwake true
-				}
-			}
-		}
+		Mailbox.Get add new MouseDown(p)
 	}
 
 	def mouseDownShift(p: Vec2) = {
@@ -252,15 +370,7 @@ class PushOfWarTest(remoteAddress: String = "127.0.0.1", localAddress: String = 
 
 	override def mouseUp(p: Vec2) = {
 		super.mouseUp(p)
-		if (!Player1.IsDone) {
-			clickObject foreach (_ mouseUp)
-			clickObject foreach (_ click)
-			clickObject = None
-			objects foreach (_ stop)
-
-			mouseJoint foreach (getWorld() destroyJoint _)
-			mouseJoint = None
-		}
+		Mailbox.Get add new MouseUp(p)
 	}
 
 	override def mouseMove(p: Vec2) = {
@@ -269,49 +379,14 @@ class PushOfWarTest(remoteAddress: String = "127.0.0.1", localAddress: String = 
 	}
 
 	override def keyPressed(keyChar: Char, keyCode: Int) = {
-		System.out.println("Key pressed: " + keyChar + " (" + keyCode + ")")
 		keyCode match {
-			case 67 => // c
-				PushOfWarTest.IsRunning = false
-				PushOfWarTest.Reset
-				reset
-			case 68 => // d
-				if (!PushOfWarTest.IsRunning && numPlayers == 1) {
-					Player1.IsDone = true
-					quicksave
-					this sendMessage new Done(this filterPlayer1 PushOfWarTest.QuickSave)
-					if (Player2.IsDone) {
-						PushOfWarTest.doLoadFromFile = false
-						_load
-					}
-				}
-			case 72 => // h
-				setShowInfo(!getShowInfo())
-			case 83 => // s
-				if (!Player1.IsDone)
-					spawnSpike(this getWorldMouse)
-			case 10 => // enter
-				if (!PushOfWarTest.IsRunning && (numPlayers == 2 || (Player1.IsDone && Player2.IsDone))) {
-					quicksave
-					start
-					whoStarted = IStarted
-					this sendMessage Run
-					PushOfWarTest.IsRunning = true
-				}
-			case 116 => // F5
-				if (!PushOfWarTest.IsRunning)
-					saveToFile
-			case 117 => // F6
-				PushOfWarTest.IsRunning = false
-				PushOfWarTest.doLoadFromFile = true
-				reset
 			case 16 => // Shift
 				KeyModifier.Shift = true
 			case 17 => // Ctrl
 				KeyModifier.Ctrl = true
 			case 18 => // Alt
 				KeyModifier.Alt = true
-			case _ =>
+			case i: Int => Mailbox.Get add new KeyPressed(i)
 		}
 	}
 
@@ -346,22 +421,22 @@ class PushOfWarTest(remoteAddress: String = "127.0.0.1", localAddress: String = 
 
 	def saveToFile = {
 		quicksave
-		PushOfWarTest saveToFile
+		PushOfWarTest saveToFile saveFile
 	}
 
 	override def reset = {
-		super.reset
 		Player1.IsDone = false
 		mouseJoint = None
 		whoStarted = NooneStarted
-		this sendMessage Reset
+		this sendMessage Reset()
+		super.reset
 	}
 
 	override def _load = {
 		if (PushOfWarTest.doLoadFromFile == true)
-			PushOfWarTest loadFromFile
-			
-		objects clone() foreach (this removeObject _)
+			PushOfWarTest loadFromFile saveFile
+
+		objects clone () foreach (this removeObject _)
 		objects clear
 
 		PushOfWarTest.QuickSave.getElement("Objects").children foreach createObject
@@ -382,6 +457,7 @@ class PushOfWarTest(remoteAddress: String = "127.0.0.1", localAddress: String = 
 			case "BaseObjectPlayer" => Option apply (new BaseObjectPlayer(this, x, y, angle))
 			case "Cone" => Option apply (new Cone(this, x, y, angle))
 			case "Spike" => Option apply (new Spike(this, x, y, angle))
+			case "SpikeHard" => Option apply (new SpikeHard(this, x, y, angle))
 			case "SteamWheel" => Option apply (new SteamWheel(this, x, y, angle))
 			case "Triangle" => Option apply (new Triangle(this, x, y, angle))
 			case "Wheel" => Option apply (new Wheel(this, x, y, angle))
@@ -417,7 +493,7 @@ class PushOfWarTest(remoteAddress: String = "127.0.0.1", localAddress: String = 
 
 	def addObject(obj: BaseObjectDynamic) = {
 		objects += obj
-		println("Created " + obj.toString() + " at (" + obj.body.getPosition().x.toInt + "," + obj.body.getPosition().y.toInt + ")")
+		//println("Created " + obj.toString() + " at (" + obj.body.getPosition().x.toInt + "," + obj.body.getPosition().y.toInt + ")")
 	}
 
 	def getObject(id: Int) = objects filter (_.id == id) headOption
@@ -426,13 +502,13 @@ class PushOfWarTest(remoteAddress: String = "127.0.0.1", localAddress: String = 
 		objects -= obj
 		obj.getConnectedObjects foreach (_ removeObject obj)
 		obj.destroy
-		getWorld() destroyBody obj.body
-		println("Destroyed " + obj.toString())
+		getWorld destroyBody obj.body
+		//println("Destroyed " + obj.toString())
 	}
 
 	def start = {
 		objects filter (_ hasBeenCopied) foreach (_ activate)
-		timer = System.currentTimeMillis() + oneSecond
+		checkForPoints = true
 		previousDistance(0) = 0
 		previousDistance(1) = 0
 	}
@@ -455,21 +531,23 @@ class PushOfWarTest(remoteAddress: String = "127.0.0.1", localAddress: String = 
 			val sign = ((playerBox.playerId - 1) * 2 - 1)
 			val startPoint = sign * 140
 			val distance = -sign * (playerBox.body.getPosition().x - startPoint)
-			if (distance > 280) {
-				Player Get (playerBox.playerId) GiverPoints (10)
-				timer = 0
-			}
 			while (distance - previousDistance(playerBox.playerId - 1) > 28 && previousDistance(playerBox.playerId - 1) < 280) {
 				Player Get (playerBox.playerId) GiverPoints (1)
-				previousDistance(playerBox.playerId - 1) += 56
+				previousDistance(playerBox.playerId - 1) += 28
+				addRaceInfoText(s"Player${playerBox.playerId} recieved 1 point")
 			}
-			println("Distance Player " + playerBox.playerId + " " + distance)
+			if (distance > 280) {
+				Player Get (playerBox.playerId) GiverPoints (10)
+				checkForPoints = false
+				addRaceInfoText(s"Player ${playerBox.playerId} won the race and recieved 10 points")
+			}
 		}
 	}
 
 	override def exit = {
 		super.exit
 		systemServer.shutdown
+		println("Exit")
 	}
 
 	def filterPlayer1(element: XMLElement) = {
@@ -485,11 +563,10 @@ class PushOfWarTest(remoteAddress: String = "127.0.0.1", localAddress: String = 
 	}
 
 	def synchFrom(element: XMLElement) = {
-		val player2Objs = element.children filter (_.getAttribute("playerId").value.toInt == 1)
-		player2Objs foreach (el => el.getAttribute("x").value = (-1.0F * el.getAttribute("x").value.toFloat).toString)
-		player2Objs foreach (el => el.getAttribute("angle").value = (-1.0F * el.getAttribute("angle").value.toFloat).toString)
-		player2Objs foreach (el => el.getAttribute("xVel").value = (-1.0F * el.getAttribute("xVel").value.toFloat).toString)
-		player2Objs foreach (el => el.getAttribute("angleVel").value = (-1.0F * el.getAttribute("angleVel").value.toFloat).toString)
+		element.children foreach (el => el.getAttribute("x").value = (-1.0F * el.getAttribute("x").value.toFloat).toString)
+		element.children foreach (el => el.getAttribute("angle").value = (Math.PI.toFloat - el.getAttribute("angle").value.toFloat).toString)
+		element.children foreach (el => el.getAttribute("xVel").value = (-1.0F * el.getAttribute("xVel").value.toFloat).toString)
+		element.children foreach (el => el.getAttribute("angleVel").value = (-1.0F * el.getAttribute("angleVel").value.toFloat).toString)
 
 		element.children foreach (el => (this getObject (el.getAttribute("id").value.toInt)) foreach (obj => obj loadPos el))
 	}

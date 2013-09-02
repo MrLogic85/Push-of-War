@@ -2,17 +2,16 @@ package com.sleepyduck.pushofwar.model
 
 import scala.Option.option2Iterable
 import scala.collection.mutable.ArrayBuffer
-
 import org.jbox2d.collision.shapes.Shape
 import org.jbox2d.common.Transform
 import org.jbox2d.common.Vec2
 import org.jbox2d.dynamics.FixtureDef
-
 import com.sleepyduck.pushofwar.PushOfWarTest
 import com.sleepyduck.pushofwar.util.KeyModifier
 import com.sleepyduck.pushofwar.util.Player
 import com.sleepyduck.xml.XMLElement
 import com.sleepyduck.xml.XMLParsable
+import com.sleepyduck.pushofwar.util.ColorChooser
 
 abstract class BaseObjectDynamic(pow: PushOfWarTest, x: Float = 0, y: Float = 0, angle: Float = 0, copied: Boolean = false)
 	extends BaseObject(pow, x, y, angle) with XMLParsable with CollisionNormal with Cost0 {

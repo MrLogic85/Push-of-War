@@ -54,10 +54,13 @@ class Spike(pow: PushOfWarTest, x: Float = 0, y: Float = 0, angle: Float = 0, co
 	}
 
 	override def destroy = clearJoints
-	
-	override def removeObject(obj:BaseObjectDynamic) = {
+
+	override def removeObject(obj: BaseObjectDynamic) = {
 		super.removeObject(obj)
-		joints filter (j => (j.getBodyA() == obj.body) || (j.getBodyB() == obj.body)) foreach (j => (joints -= j, pow getWorld() destroyJoint j))
+		if (obj.body != null)
+			joints filter (_ != null) filter (j => (j.getBodyA() == obj.body) || (j.getBodyB() == obj.body)) foreach (j =>
+				(joints -= j, pow getWorld () destroyJoint j))
+
 		objects -= obj
 	}
 

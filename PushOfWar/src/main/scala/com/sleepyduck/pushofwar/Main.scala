@@ -21,7 +21,8 @@ object Main extends App {
 
 		model.addCategory("Push of War Tests"); // add a category
 		val networking = this parse args
-		val test = new PushOfWarTest(localAddress = networking(0), remoteAddress = networking(1), localPort = networking(2), remotePort = networking(3))
+		val test = new PushOfWarTest(localAddress = networking(0), remoteAddress = networking(1), localPort = networking(2), remotePort = networking(3), saveFile = networking(4))
+		test.setShowInfo(false)
 		model.addTest(test); // add our test
 
 		val testbed = new WrappedTestbedFrame(model, panel);
@@ -32,12 +33,13 @@ object Main extends App {
 	}
 
 	def parse(args: Array[String]) = {
-		val networking = Array[String](InetAddress.getLocalHost.getHostAddress, "127.0.0.1", "2552", "2552")
+		val networking = Array[String](InetAddress.getLocalHost.getHostAddress, "127.0.0.1", "2552", "2552", "SaveFile")
 		for (i <- 0 until args.length) args(i) match {
 			case "-la" => networking(0) = args(i + 1)
 			case "-ra" => networking(1) = args(i + 1)
 			case "-lp" => networking(2) = args(i + 1)
 			case "-rp" => networking(3) = args(i + 1)
+			case "-save" => networking(4) = args(i + 1)
 			case _ =>
 		}
 		if (networking(1) == "127.0.0.1")

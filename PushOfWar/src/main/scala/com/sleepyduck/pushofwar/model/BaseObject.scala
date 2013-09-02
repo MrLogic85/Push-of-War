@@ -53,8 +53,8 @@ abstract class BaseObject(pow: PushOfWarTest, x: Float, y: Float, angle: Float =
 	}
 
 	getExtraFixture foreach (body createFixture _)
-	body createFixture getFixture
 
+	body createFixture getFixture
 	body getFixtureList () setFilterData CollissionGroupStatic
 
 	def getFixture: FixtureDef
